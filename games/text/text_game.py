@@ -1,5 +1,6 @@
 import pygame
 import sys
+import json
 
 pygame.init()
 
@@ -199,13 +200,24 @@ def draw_selection(scene=0):
 # ---------- Main Loop ----------
 def run(name):
     global state, selected, scene, checked
-    while True:
+    running = True
+    result = {'action': 'exit'}
+
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                # user closed window -> cleanly stop and return exit result
+                running = False
+                result = {'action': 'exit'}
+                break
 
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    # ESC is a level-skipper: stop loop and return a 'skipped' result
+                    running = False
+                    result = {'action': 'skipped'}
+                    break
+
                 if state == "menu":
                     if event.key == pygame.K_RETURN:
                         state = "selection"
@@ -274,8 +286,10 @@ def run(name):
                         elif(current_options[selected] == "Insert Key"):
                             scene = "Insert Key"
                         elif(current_options[selected] == "Move forward"):
-                            pygame.quit()
-                            return
+                            # finish the game successfully
+                            running = False
+                            result = {'action': 'finished'}
+                            break
                         else:
                             scene = "Failure"
                         if(sorted(checked) == ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"] and ("Key" not in options["Sheets"])):
@@ -284,10 +298,23 @@ def run(name):
                             scene = "Key"
                         selected = 1  # reset selection to first option
 
-        if state == "menu":
-            draw_menu()
-        elif state == "selection":
-            draw_selection(scene)
+        # draw/update
+        if running:
+            if state == "menu":
+                draw_menu()
+            elif state == "selection":
+                draw_selection(scene)
+
+    # end main loop -> cleanup
+    try:
+        pygame.quit()
+    except Exception:
+        pass
+
+    return result
 
 if __name__ == "__main__":
-    run("")
+    # when run as a standalone script print a minimal JSON result so the launcher can parse it
+    res = run("")
+    out = {'action': res.get('action', 'exit')}
+    print(json.dumps(out))

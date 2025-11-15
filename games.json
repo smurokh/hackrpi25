@@ -1,12 +1,14 @@
 [
+
+    {
+    "name": "text_game",
+    "entry": "games/text/text_game.py",
+    "mode": "interactive"
+  },
   {
     "name": "snakes",
     "entry": "games/snakes/snakes_and_ladders.py",
     "mode": "interactive"
-  },
-  {
-    "name": "text_game",
-    "entry": "games/text/text_game.py",
-    "mode": "interactive"
   }
+  
 ]

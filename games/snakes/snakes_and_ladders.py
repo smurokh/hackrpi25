@@ -4,23 +4,17 @@ snakes_and_ladders.py
 
 Single-player Snakes & Ladders implemented with pygame.
 
-Main change: all runtime logic (pygame init, event loop, animations, cleanup)
-is inside run_flash(on_finish=None, width=800, height=600). This function
-returns a result dict when it finishes and optionally calls on_finish(result).
-
-When run as a script, it will call run_flash().
-
-Notes:
-- This file no longer calls sys.exit() so it can be imported and used by other code.
-- To adapt this for web (pygbag) or remote streaming, see the notes after the file.
+This variant returns only a simple result dict with 'action' (no redundant 'won' flag),
+and when run as a script it prints a small JSON result to stdout so the launcher can detect
+skipped levels.
 """
-
 import pygame
 import sys
 import random
 import time
 import math
 import os
+import json
 
 # ---- Configuration (adapted for 800x600) ----
 WINDOW_WIDTH = 800
@@ -255,10 +249,7 @@ def run_flash(on_finish=None, width=800, height=600):
     """
     Initialize pygame and run the game loop. When the game ends (exit or win),
     this function returns a dict result and calls on_finish(result) if provided.
-
-    Example:
-        def cb(result): print('game finished', result)
-        run_flash(on_finish=cb)
+    The dict only contains 'action' (e.g. 'finished', 'exit', 'skipped').
     """
     # initialize pygame & window
     pygame.init()
@@ -281,8 +272,6 @@ def run_flash(on_finish=None, width=800, height=600):
     btn_mini_local = pygame.Rect(info_rect_local.x, info_rect_local.y + info_rect_local.height - 100, 140, 36)
     btn_swap_local = pygame.Rect(info_rect_local.x + 150, info_rect_local.y + info_rect_local.height - 100, 110, 36)
 
-    # Make dice_rect available to helper functions that reference the module-level name
-    # (many helper_impl functions use 'dice_rect'). This sets the module-level variable.
     global dice_rect
     dice_rect = dice_rect_local
 
@@ -319,7 +308,6 @@ def run_flash(on_finish=None, width=800, height=600):
     swap_first = None
     ROLL_BUTTON_AREA = dice_rect_local
 
-    # inner helpers close over these local names
     def roll_dice_animation_inner():
         return roll_dice_animation_impl(screen, dice_rect_local, font_dice, player, player['color'], dice_images_local if images_loaded_local else None)
 
@@ -330,18 +318,19 @@ def run_flash(on_finish=None, width=800, height=600):
         return animate_along_path_impl(player, start_sq, end_sq, screen, player['color'], dice_images_local if images_loaded_local else None)
 
     # main loop
+    result = {'action': 'exit'}
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
                 result = {'action': 'exit'}
-                # call on_finish and return below
                 break
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    # Treat ESC as a level-skip: stop and return 'skipped' result
                     running = False
-                    result = {'action': 'exit'}
+                    result = {'action': 'skipped'}
                     break
 
                 if event.key == pygame.K_r:
@@ -503,7 +492,7 @@ def run_flash(on_finish=None, width=800, height=600):
             "- Click dice or press SPACE to roll",
             "- Press M or click Mini Ladder to use mini-ladder (x2)",
             "- Press S or click Swap Tiles to enter swap mode (x3)",
-            "- Press R to reset, ESC to quit",
+            "- Press R to reset, ESC to quit/skip level",
             "",
         ]
         iy = info_rect_local.y
@@ -554,15 +543,17 @@ def run_flash(on_finish=None, width=800, height=600):
 
     # end main loop -> cleanup
     # construct result dict for caller
-    # If player reached 100 -> finished; otherwise exit
     if player.get('has_won'):
-        result = {'action': 'finished', 'won': True}
-    else:
-        result = {'action': 'exit', 'won': False}
-    # call on_finish callback if provided
+        result = {'action': 'finished'}
+    # else result was set earlier, e.g. skipped or exit
+
     try:
         if on_finish:
-            on_finish(result)
+            try:
+                on_finish(result)
+            except Exception:
+                # do not allow on_finish errors to crash the game
+                pass
     except Exception:
         pass
     # tidy up pygame so interpreter isn't left with initialized modules
@@ -667,6 +658,8 @@ def cells_adjacent(a, b):
     rb, cb = rowcol(b)
     return (abs(ra - rb) + abs(ca - cb)) == 1
 
-# If run as a script, run the game
+# If run as a script, run the game and print a minimal JSON result for the launcher
 if __name__ == "__main__":
-    run_flash()
+    res = run_flash()
+    out = {'action': res.get('action', 'exit')}
+    print(json.dumps(out))
