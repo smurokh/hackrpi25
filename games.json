@@ -1,5 +1,9 @@
 [
-
+    {
+    "name": "start",
+    "entry": "games/start/starting_screen.py",
+    "mode": "interactive"
+  },
     {
     "name": "text_game",
     "entry": "games/text/text_game.py",
