@@ -21,7 +21,7 @@ state = "menu"  # or "selection"
 menu_message = "Press ENTER to start"
 options = {
     "Entry": [
-        "You enter the house. The lights are alreay on, though dim. You see three doors, all closed. Which direction do you go? ",
+        "You enter the house. The lights are already on, though dim. You see three doors, all closed. Which direction do you go? ",
         "Forward",
         "Left",
         "Right",
@@ -119,12 +119,6 @@ scene = "Entry"
 checked = []
 
 # ---------- Draw Functions ----------
-def draw_menu():
-    WIN.fill(BLACK)
-    text = BIGFONT.render(menu_message, True, WHITE)
-    WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
-    pygame.display.update()
-
 def wrap_text(text, font, max_width):
     """Return a list of lines where each line's pixel width <= max_width.
 
@@ -199,7 +193,7 @@ def draw_selection(scene=0):
 
 # ---------- Main Loop ----------
 def run(name):
-    global state, selected, scene, checked
+    global selected, scene, checked
     running = True
     result = {'action': 'exit'}
 
@@ -218,92 +212,83 @@ def run(name):
                     result = {'action': 'skipped'}
                     break
 
-                if state == "menu":
-                    if event.key == pygame.K_RETURN:
-                        state = "selection"
-                        # ensure we start on the first selectable option
-                        selected = 1
-                elif state == "selection":
-                    current_options = options[scene]
-                    n = len(current_options)
-                    # if there are no selectable entries, ignore navigation
-                    if n <= 1:
-                        continue
+                current_options = options[scene]
+                n = len(current_options)
+                # if there are no selectable entries, ignore navigation
+                if n <= 1:
+                    continue
 
-                    if event.key == pygame.K_UP:
-                        selected -= 1
-                        if selected < 1:
-                            selected = n - 1
-                    elif event.key == pygame.K_DOWN:
-                        selected += 1
-                        if selected > n - 1:
-                            selected = 1
-                    elif event.key == pygame.K_RETURN:
-                        if(current_options[selected] == "Forward"):
-                            scene = "Exit"
-                        elif(current_options[selected] == "Back"):
-                            scene = "Entry"
-                        elif(current_options[selected] == "Left"):
-                            scene = "Sheets"
-                        elif(current_options[selected] == "Right"):
-                            scene = "Lockbox"
-                        elif(current_options[selected] == "Leave"):
-                            scene = "Entry"
-                        elif(current_options[selected] == "Check another"):
-                            if scene in ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"] and scene not in checked:
-                                checked.append(scene)
-                            if scene in ["Sheet1 Connected", "Sheet1 Counted", "Sheet2 x", "Sheet2 y"] and scene.split()[0] not in checked:
-                                checked.append(scene.split()[0])
-                            scene = "Sheets"
-                        elif(current_options[selected] == "One"):
-                            scene = "Sheet1"
-                        elif(current_options[selected] == "Connect"):
-                            scene = "Sheet1 Connected"
-                        elif(current_options[selected] == "Count"):
-                            scene = "Sheet1 Counted"
-                        elif(current_options[selected] == "Two"):
-                            scene = "Sheet2"
-                        elif(current_options[selected] == "x"):
-                            scene = "Sheet2 x"
-                        elif(current_options[selected] == "y"):
-                            scene = "Sheet2 y"
-                        elif(current_options[selected] == "Three"):
-                            scene = "Sheet3"
-                        elif(current_options[selected] == "Four"):
-                            scene = "Sheet4"
-                        elif(current_options[selected] == "Five"):
-                            scene = "Sheet5"
-                        elif(current_options[selected] == "Six"):
-                            scene = "Sheet6"
-                        elif(current_options[selected] == "SISART"):
-                            scene = "Open"
-                            if("Insert Key" not in options["Exit"]):
-                                options["Exit"].append("Insert Key")
-                        elif(current_options[selected] == "Key"):
-                            scene = "Key"
-                        elif(current_options[selected] == "Enter Code"):
-                            scene = "Enter code"
-                        elif(current_options[selected] == "Insert Key"):
-                            scene = "Insert Key"
-                        elif(current_options[selected] == "Move forward"):
-                            # finish the game successfully
-                            running = False
-                            result = {'action': 'finished'}
-                            break
-                        else:
-                            scene = "Failure"
-                        if(sorted(checked) == ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"] and ("Key" not in options["Sheets"])):
-                            options["Sheets"].append("Key")
-                            options["Lockbox"].append("Enter Code")
-                            scene = "Key"
-                        selected = 1  # reset selection to first option
+                if event.key == pygame.K_UP:
+                    selected -= 1
+                    if selected < 1:
+                        selected = n - 1
+                elif event.key == pygame.K_DOWN:
+                    selected += 1
+                    if selected > n - 1:
+                        selected = 1
+                elif event.key == pygame.K_RETURN:
+                    if(current_options[selected] == "Forward"):
+                        scene = "Exit"
+                    elif(current_options[selected] == "Back"):
+                        scene = "Entry"
+                    elif(current_options[selected] == "Left"):
+                        scene = "Sheets"
+                    elif(current_options[selected] == "Right"):
+                        scene = "Lockbox"
+                    elif(current_options[selected] == "Leave"):
+                        scene = "Entry"
+                    elif(current_options[selected] == "Check another"):
+                        if scene in ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"] and scene not in checked:
+                            checked.append(scene)
+                        if scene in ["Sheet1 Connected", "Sheet1 Counted", "Sheet2 x", "Sheet2 y"] and scene.split()[0] not in checked:
+                            checked.append(scene.split()[0])
+                        scene = "Sheets"
+                    elif(current_options[selected] == "One"):
+                        scene = "Sheet1"
+                    elif(current_options[selected] == "Connect"):
+                        scene = "Sheet1 Connected"
+                    elif(current_options[selected] == "Count"):
+                        scene = "Sheet1 Counted"
+                    elif(current_options[selected] == "Two"):
+                        scene = "Sheet2"
+                    elif(current_options[selected] == "x"):
+                        scene = "Sheet2 x"
+                    elif(current_options[selected] == "y"):
+                        scene = "Sheet2 y"
+                    elif(current_options[selected] == "Three"):
+                        scene = "Sheet3"
+                    elif(current_options[selected] == "Four"):
+                        scene = "Sheet4"
+                    elif(current_options[selected] == "Five"):
+                        scene = "Sheet5"
+                    elif(current_options[selected] == "Six"):
+                        scene = "Sheet6"
+                    elif(current_options[selected] == "SISART"):
+                        scene = "Open"
+                        if("Insert Key" not in options["Exit"]):
+                            options["Exit"].append("Insert Key")
+                    elif(current_options[selected] == "Key"):
+                        scene = "Key"
+                    elif(current_options[selected] == "Enter Code"):
+                        scene = "Enter code"
+                    elif(current_options[selected] == "Insert Key"):
+                        scene = "Insert Key"
+                    elif(current_options[selected] == "Move forward"):
+                        # finish the game successfully
+                        running = False
+                        result = {'action': 'finished'}
+                        break
+                    else:
+                        scene = "Failure"
+                    if(sorted(checked) == ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"] and ("Key" not in options["Sheets"])):
+                        options["Sheets"].append("Key")
+                        options["Lockbox"].append("Enter Code")
+                        scene = "Key"
+                    selected = 1  # reset selection to first option
 
         # draw/update
         if running:
-            if state == "menu":
-                draw_menu()
-            elif state == "selection":
-                draw_selection(scene)
+            draw_selection(scene)
 
     # end main loop -> cleanup
     try:
@@ -315,6 +300,9 @@ def run(name):
 
 if __name__ == "__main__":
     # when run as a standalone script print a minimal JSON result so the launcher can parse it
-    res = run("")
+    player_name = None
+    if len(sys.argv) > 1:
+        player_name = sys.argv[1]
+    res = run(player_name)
     out = {'action': res.get('action', 'exit')}
     print(json.dumps(out))
