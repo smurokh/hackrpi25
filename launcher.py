@@ -2,11 +2,15 @@
 """
 launcher.py
 
-Run interactive pygame games described in games.json without assuming a virtualenv.
+Runs interactive pygame games described in games.json without a venv.
 
-This version captures stdout from each interactive game process and looks for
-a small JSON result object printed by the game. If any game reports action == "skipped",
-the launcher sets `all_levels_completed` to False. The variable starts True.
+Fixes & robustness:
+- Launch child Python with -u (unbuffered) and set PYTHONUNBUFFERED in env so prints from GUI games
+  are captured immediately when they exit.
+- When parsing child stdout, scan lines and try json.loads on each non-empty line until one parses.
+  This tolerates games that print other debug text before/after the JSON.
+- Preserve previous behavior: store a captured player_name and set all_levels_completed False when
+  any game's parsed action == "skipped".
 """
 from __future__ import annotations
 import argparse
@@ -15,7 +19,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Dict, Tuple, Any
+from typing import Optional, Dict, Tuple, Any, List
 import os
 
 ROOT = Path(__file__).resolve().parent
@@ -29,55 +33,91 @@ def load_manifest(path: Path) -> list:
 
 
 def resource_base() -> Path:
-    """
-    Resolve base path for resource access (works with PyInstaller if used).
-    Games can call the provided utils.resource_path.resource_path helper which
-    uses a similar mechanism.
-    """
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS)
     return ROOT
 
 
-def run_interactive(entry: Path, env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
+def run_interactive(entry: Path, extra_args: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
     """
     Run an interactive pygame script as a subprocess and wait for it to exit.
-    Capture stdout/stderr so we can parse a small JSON result printed at exit.
+    extra_args: list of extra command-line arguments to append after the entry script.
     Returns (returncode, stdout, stderr).
+
+    Uses unbuffered python (-u) and sets PYTHONUNBUFFERED=1 in the child's env so printed JSON
+    will reliably appear in stdout for the launcher to parse.
     """
-    print(f"Starting interactive game: {entry}")
-    # Capture stdout/stderr; it's safe for interactive windows to open while we capture output.
+    # Build command: use -u to force unbuffered stdout/stderr in child Python process
+    cmd = [sys.executable, "-u", str(entry)]
+    if extra_args:
+        cmd += [str(a) for a in extra_args if a is not None]
+
+    print("Starting interactive game:", " ".join(cmd))
+    # Prepare env: copy current env then inject GAME_BASE and PYTHONUNBUFFERED to ensure child prints flush
+    child_env = os.environ.copy()
+    if env:
+        # overlay sanitized env from launcher (env produced by os_environ_safe())
+        child_env.update(env)
+    # Ensure unbuffered output in child
+    child_env["PYTHONUNBUFFERED"] = "1"
+
+    # Start the process; capture stdout/stderr so we can parse the minimal JSON result the game prints.
     proc = subprocess.Popen(
-        [sys.executable, str(entry)],
+        cmd,
         cwd=str(entry.parent),
-        env=env,
+        env=child_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
-    out, err = proc.communicate()  # wait for process to exit
+    out, err = proc.communicate()
     rc = proc.returncode
     if err:
+        # print stderr for debugging
         print(f"--- stderr from {entry.name} ---\n{err}")
     return rc, (out or "").strip(), (err or "").strip()
 
 
 def os_environ_safe() -> Dict[str, str]:
-    """
-    Return a sanitized copy of os.environ with str keys/values. This is used
-    to pass environment variables into subprocesses safely.
-    """
     env = {}
     for k, v in os.environ.items():
         env[str(k)] = str(v)
     return env
 
 
-def run_game_cfg(cfg: dict, override_mode: Optional[str] = None) -> Optional[str]:
+def _parse_first_json_from_stdout(stdout: str) -> Optional[dict]:
     """
-    Run a single game config. For this repository we treat everything as interactive.
-    Returns the parsed action string from the game's JSON result if available,
-    otherwise None.
+    Scan stdout lines and try to parse a JSON object from the first line that parses.
+    This is tolerant of extra log lines before/after the JSON.
+    """
+    if not stdout:
+        return None
+    # Try whole stdout first in case script prints only JSON
+    s = stdout.strip()
+    if not s:
+        return None
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+    # otherwise try line-by-line (skip empty lines)
+    for line in s.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            parsed = json.loads(line)
+            return parsed
+        except Exception:
+            # continue scanning lines
+            continue
+    return None
+
+
+def run_game_cfg(cfg: dict, extra_args: Optional[List[str]] = None, override_mode: Optional[str] = None) -> Optional[dict]:
+    """
+    Run a single game config. Treat as interactive by default.
+    Returns parsed JSON dict from stdout if present, otherwise None.
     """
     name = cfg.get("name")
     entry = cfg.get("entry")
@@ -94,35 +134,19 @@ def run_game_cfg(cfg: dict, override_mode: Optional[str] = None) -> Optional[str
         print("Entry path not found:", entry_path)
         return None
 
-    # Allow games to find resources; set GAME_BASE in env
     env = os_environ_safe()
     env["GAME_BASE"] = str(resource_base())
 
     try:
-        if mode == "interactive":
-            rc, stdout, stderr = run_interactive(entry_path, env=env)
-            # Try to parse JSON from stdout (games are expected to print a small JSON result)
-            if stdout:
-                try:
-                    parsed = json.loads(stdout.strip())
-                    action = parsed.get("action")
-                    print(f"Game {name} reported action: {action!r}")
-                    return action
-                except Exception:
-                    # not JSON; ignore but show a snippet
-                    print(f"Game {name} printed (non-JSON): {stdout[:200]!r}")
-                    return None
-            else:
-                return None
-        else:
-            # treat other modes as interactive for now
-            rc, stdout, stderr = run_interactive(entry_path, env=env)
-            if stdout:
-                try:
-                    parsed = json.loads(stdout.strip())
-                    return parsed.get("action")
-                except Exception:
-                    return None
+        rc, stdout, stderr = run_interactive(entry_path, extra_args=extra_args, env=env)
+        if not stdout:
+            return None
+        parsed = _parse_first_json_from_stdout(stdout)
+        if parsed is None:
+            print(f"Game {name} printed (non-JSON or JSON not found). stdout snippet: {stdout[:200]!r}")
+            return None
+        print(f"Game {name} printed JSON: {parsed!r}")
+        return parsed
     except Exception as e:
         print("Error running game:", e)
         return None
@@ -148,15 +172,21 @@ def main(argv=None):
             print("No such game:", args.game)
             return 3
 
-    # This variable starts True and becomes False if any level is skipped.
     all_levels_completed = True
+    current_player_name: Optional[str] = None
 
     def one_pass():
-        nonlocal all_levels_completed
+        nonlocal all_levels_completed, current_player_name
         for g in games:
-            action = run_game_cfg(g, override_mode=args.mode)
+            extra = [current_player_name] if current_player_name is not None else None
+            parsed = run_game_cfg(g, extra_args=extra, override_mode=args.mode)
+            if not parsed:
+                continue
+            action = parsed.get("action")
             if action == "skipped":
                 all_levels_completed = False
+            if "player_name" in parsed:
+                current_player_name = parsed.get("player_name")
 
     if args.loop:
         print("Starting dev loop (press CTRL+C to stop).")
@@ -171,6 +201,7 @@ def main(argv=None):
         one_pass()
         print("=" * 60)
         print(f"All levels completed: {all_levels_completed}")
+        print(f"Player name captured: {current_player_name!r}")
 
     return 0
 

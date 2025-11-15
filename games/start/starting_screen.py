@@ -118,5 +118,7 @@ def run_start():
     p.display.update()
     return(player_name)
    
+import json
 if __name__ == "__main__": 
-    run_start()
+    player_name = run_start()
+    print(json.dumps({"player_name": player_name}))
