@@ -4,10 +4,17 @@ snakes_and_ladders.py
 
 Single-player Snakes & Ladders implemented with pygame.
 
-This variant returns only a simple result dict with 'action' (no redundant 'won' flag),
-and when run as a script it prints a small JSON result to stdout so the launcher can detect
-skipped levels.
+This variant accepts optional argv:
+  argv[1] = player_name (unused here)
+  argv[2] = timer_start_timestamp (float epoch seconds) - optional
+
+If TIMER_START is provided, the game displays a live minutes:seconds timer
+in the top-right corner and returns {'action':..., 'elapsed_seconds': <float>}
+when it exits.
+
+When executed as a script it prints a small JSON result to stdout for the launcher.
 """
+from typing import Optional
 import pygame
 import sys
 import random
@@ -64,6 +71,9 @@ JUMPS = {
     95: 75,
     98: 78,
 }
+
+# Module-level optional timer start (set by launcher via argv[2] when running as script)
+TIMER_START: Optional[float] = None
 
 # -------------------------
 # Helper functions (pure)
@@ -249,7 +259,8 @@ def run_flash(on_finish=None, width=800, height=600):
     """
     Initialize pygame and run the game loop. When the game ends (exit or win),
     this function returns a dict result and calls on_finish(result) if provided.
-    The dict only contains 'action' (e.g. 'finished', 'exit', 'skipped').
+    The dict only contains 'action' (e.g. 'finished', 'exit', 'skipped') and
+    includes 'elapsed_seconds' if TIMER_START was provided.
     """
     # initialize pygame & window
     pygame.init()
@@ -258,7 +269,7 @@ def run_flash(on_finish=None, width=800, height=600):
     clock = pygame.time.Clock()
 
     # fonts (set globals used by draw functions)
-    global font_small, font_medium, font_large, font_dice
+    global font_small, font_medium, font_large, font_dice, dice_rect
     font_small = pygame.font.SysFont("arial", 14)
     font_medium = pygame.font.SysFont("arial", 20, bold=True)
     font_large = pygame.font.SysFont("arial", 44, bold=True)
@@ -267,12 +278,13 @@ def run_flash(on_finish=None, width=800, height=600):
     # Layout rectangles (placed relative to board)
     DICE_WIDTH = 220
     DICE_HEIGHT = 200
-    dice_rect_local = pygame.Rect(BOARD_PADDING + BOARD_SIZE + 16, BOARD_PADDING + 24, DICE_WIDTH, DICE_HEIGHT)
+    # Move the dice box down to make room if desired; keep enough room above for timer/title
+    dice_rect_local = pygame.Rect(BOARD_PADDING + BOARD_SIZE + 16, BOARD_PADDING + 24 + 40, DICE_WIDTH, DICE_HEIGHT)
     info_rect_local = pygame.Rect(dice_rect_local.x, dice_rect_local.y + dice_rect_local.height + 12, 240, 300)
     btn_mini_local = pygame.Rect(info_rect_local.x, info_rect_local.y + info_rect_local.height - 100, 140, 36)
     btn_swap_local = pygame.Rect(info_rect_local.x + 150, info_rect_local.y + info_rect_local.height - 100, 110, 36)
 
-    global dice_rect
+    # Make dice_rect available to helper functions that reference the module-level name
     dice_rect = dice_rect_local
 
     # Attempt to load dice images dice_1.png ... dice_6.png (expected 120x120)
@@ -308,6 +320,7 @@ def run_flash(on_finish=None, width=800, height=600):
     swap_first = None
     ROLL_BUTTON_AREA = dice_rect_local
 
+    # inner helpers close over these local names
     def roll_dice_animation_inner():
         return roll_dice_animation_impl(screen, dice_rect_local, font_dice, player, player['color'], dice_images_local if images_loaded_local else None)
 
@@ -481,9 +494,30 @@ def run_flash(on_finish=None, width=800, height=600):
         draw_jumps(screen, font_small)
         px, py = cell_index_to_coord(player['square'])
         draw_player(screen, (px, py), player['color'])
+
+        # display running timer in top-right if TIMER_START provided (minutes:seconds)
+        try:
+            if TIMER_START is not None:
+                elapsed_total = int(time.time() - float(TIMER_START))
+                mins = elapsed_total // 60
+                secs = elapsed_total % 60
+                timer_str = f"{mins:02d}:{secs:02d}"
+                timer_surf = font_small.render(f"Time {timer_str}", True, BLACK)
+                padding = 12
+                tx = width - padding - timer_surf.get_width()
+                ty = padding
+                screen.blit(timer_surf, (tx, ty))
+        except Exception:
+            pass
+
+        # draw dice box and ensure title is placed above the box, not overlapping
         draw_dice(screen, dice_rect_local, player.get('last_roll'), font_dice, dice_images_local if images_loaded_local else None)
         title = font_medium.render("Dice", True, BLACK)
-        screen.blit(title, (dice_rect_local.x + (dice_rect_local.width - title.get_width()) // 2, dice_rect_local.y - 28))
+        # place title centered above the dice box with some spacing
+        title_x = dice_rect_local.x + (dice_rect_local.width - title.get_width()) // 2
+        title_y = dice_rect_local.y - title.get_height() - 8
+        screen.blit(title, (title_x, title_y))
+
         # info lines
         info_lines = [
             message,
@@ -561,7 +595,15 @@ def run_flash(on_finish=None, width=800, height=600):
         pygame.quit()
     except Exception:
         pass
-    return result
+
+    # If TIMER_START provided, include elapsed_seconds
+    out = {'action': result.get('action', 'exit')}
+    try:
+        if TIMER_START is not None:
+            out['elapsed_seconds'] = round(time.time() - float(TIMER_START), 3)
+    except Exception:
+        pass
+    return out
 
 # Implementations of animation helpers that require access to draw functions etc.
 # Separated out so run_flash can call them cleanly.
@@ -660,6 +702,21 @@ def cells_adjacent(a, b):
 
 # If run as a script, run the game and print a minimal JSON result for the launcher
 if __name__ == "__main__":
-    res = run_flash()
-    out = {'action': res.get('action', 'exit')}
-    print(json.dumps(out))
+    # accept optional args: player_name, timer_start
+    player_name = None
+    start_ts = None
+    if len(sys.argv) > 1:
+        player_name = sys.argv[1]
+    if len(sys.argv) > 2:
+        try:
+            start_ts = float(sys.argv[2])
+        except Exception:
+            start_ts = None
+    # set module-level timer start for run_flash to use
+    TIMER_START = start_ts
+    out = run_flash()
+    # If run_flash returned a dict, print it. Ensure elapsed_seconds is present if timer used.
+    if isinstance(out, dict):
+        print(json.dumps(out))
+    else:
+        print(json.dumps({'action': 'exit'}))

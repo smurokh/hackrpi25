@@ -4,13 +4,14 @@ launcher.py
 
 Runs interactive pygame games described in games.json without a venv.
 
-Fixes & robustness:
-- Launch child Python with -u (unbuffered) and set PYTHONUNBUFFERED in env so prints from GUI games
-  are captured immediately when they exit.
-- When parsing child stdout, scan lines and try json.loads on each non-empty line until one parses.
-  This tolerates games that print other debug text before/after the JSON.
-- Preserve previous behavior: store a captured player_name and set all_levels_completed False when
-  any game's parsed action == "skipped".
+Behavior:
+- If a child prints JSON containing "player_name" the launcher stores it and
+  immediately starts a session timer (time.time()).
+- Subsequent games are launched with extra CLI args:
+    [player_name, timer_start_timestamp]
+  (timer_start_timestamp is only added after timer started).
+- Each game should print a JSON object on exit (e.g. {"action":"finished", "elapsed_seconds": 12.345})
+  The launcher will parse that JSON and update internal state (all_levels_completed and current player name).
 """
 from __future__ import annotations
 import argparse
@@ -40,28 +41,23 @@ def resource_base() -> Path:
 
 def run_interactive(entry: Path, extra_args: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
     """
-    Run an interactive pygame script as a subprocess and wait for it to exit.
-    extra_args: list of extra command-line arguments to append after the entry script.
+    Run a child game as a subprocess and wait for it to exit.
+    Use -u and PYTHONUNBUFFERED to ensure printed JSON appears in stdout reliably.
     Returns (returncode, stdout, stderr).
-
-    Uses unbuffered python (-u) and sets PYTHONUNBUFFERED=1 in the child's env so printed JSON
-    will reliably appear in stdout for the launcher to parse.
     """
-    # Build command: use -u to force unbuffered stdout/stderr in child Python process
+    # Use -u for unbuffered child Python so printed JSON is flushed
     cmd = [sys.executable, "-u", str(entry)]
     if extra_args:
         cmd += [str(a) for a in extra_args if a is not None]
-
     print("Starting interactive game:", " ".join(cmd))
-    # Prepare env: copy current env then inject GAME_BASE and PYTHONUNBUFFERED to ensure child prints flush
+
+    # child env: copy current env and overlay launcher-provided env
     child_env = os.environ.copy()
     if env:
-        # overlay sanitized env from launcher (env produced by os_environ_safe())
         child_env.update(env)
-    # Ensure unbuffered output in child
+    # ensure unbuffered python in child
     child_env["PYTHONUNBUFFERED"] = "1"
 
-    # Start the process; capture stdout/stderr so we can parse the minimal JSON result the game prints.
     proc = subprocess.Popen(
         cmd,
         cwd=str(entry.parent),
@@ -73,7 +69,6 @@ def run_interactive(entry: Path, extra_args: Optional[List[str]] = None, env: Op
     out, err = proc.communicate()
     rc = proc.returncode
     if err:
-        # print stderr for debugging
         print(f"--- stderr from {entry.name} ---\n{err}")
     return rc, (out or "").strip(), (err or "").strip()
 
@@ -87,12 +82,11 @@ def os_environ_safe() -> Dict[str, str]:
 
 def _parse_first_json_from_stdout(stdout: str) -> Optional[dict]:
     """
-    Scan stdout lines and try to parse a JSON object from the first line that parses.
-    This is tolerant of extra log lines before/after the JSON.
+    Try parsing the entire stdout as JSON; if that fails, try line-by-line.
+    Returns the first parsed JSON object found, or None.
     """
     if not stdout:
         return None
-    # Try whole stdout first in case script prints only JSON
     s = stdout.strip()
     if not s:
         return None
@@ -100,7 +94,6 @@ def _parse_first_json_from_stdout(stdout: str) -> Optional[dict]:
         return json.loads(s)
     except Exception:
         pass
-    # otherwise try line-by-line (skip empty lines)
     for line in s.splitlines():
         line = line.strip()
         if not line:
@@ -109,15 +102,13 @@ def _parse_first_json_from_stdout(stdout: str) -> Optional[dict]:
             parsed = json.loads(line)
             return parsed
         except Exception:
-            # continue scanning lines
             continue
     return None
 
 
 def run_game_cfg(cfg: dict, extra_args: Optional[List[str]] = None, override_mode: Optional[str] = None) -> Optional[dict]:
     """
-    Run a single game config. Treat as interactive by default.
-    Returns parsed JSON dict from stdout if present, otherwise None.
+    Run a single game config. Returns parsed JSON dict from stdout (if any).
     """
     name = cfg.get("name")
     entry = cfg.get("entry")
@@ -174,19 +165,46 @@ def main(argv=None):
 
     all_levels_completed = True
     current_player_name: Optional[str] = None
+    timer_started = False
+    timer_start_ts: Optional[float] = None
 
     def one_pass():
-        nonlocal all_levels_completed, current_player_name
+        nonlocal all_levels_completed, current_player_name, timer_started, timer_start_ts
         for g in games:
-            extra = [current_player_name] if current_player_name is not None else None
+            # prepare extra args: first pass player_name then timer start ts (if started)
+            extra: Optional[List[str]] = None
+            if current_player_name is not None:
+                extra = [current_player_name]
+                if timer_started and timer_start_ts is not None:
+                    extra.append(str(timer_start_ts))
+
             parsed = run_game_cfg(g, extra_args=extra, override_mode=args.mode)
             if not parsed:
+                # no JSON printed / no parseable output
                 continue
+
+            # if the parsed JSON contains player_name, capture and start timer immediately
+            if "player_name" in parsed:
+                pname = parsed.get("player_name")
+                # store name even if it's null
+                current_player_name = pname
+                if pname is not None and not timer_started:
+                    timer_started = True
+                    timer_start_ts = time.time()
+                    print(f"Timer started at {timer_start_ts} for player {current_player_name!r}")
+
+            # detect skip action
             action = parsed.get("action")
             if action == "skipped":
                 all_levels_completed = False
-            if "player_name" in parsed:
-                current_player_name = parsed.get("player_name")
+
+            # read elapsed_seconds if returned and log it
+            if "elapsed_seconds" in parsed:
+                try:
+                    elapsed = float(parsed.get("elapsed_seconds"))
+                    print(f"Game {g.get('name')} reported elapsed_seconds: {elapsed:.3f}s")
+                except Exception:
+                    pass
 
     if args.loop:
         print("Starting dev loop (press CTRL+C to stop).")
@@ -202,6 +220,12 @@ def main(argv=None):
         print("=" * 60)
         print(f"All levels completed: {all_levels_completed}")
         print(f"Player name captured: {current_player_name!r}")
+        if timer_started:
+            if timer_start_ts is not None:
+                elapsed_total = time.time() - float(timer_start_ts)
+                print(f"Total elapsed seconds since timer start: {elapsed_total:.3f}s")
+            else:
+                print("Timer was started but start timestamp is unavailable.")
 
     return 0
 

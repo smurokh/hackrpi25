@@ -1,6 +1,8 @@
 import pygame
 import sys
 import json
+import time
+from typing import Optional
 
 pygame.init()
 
@@ -11,6 +13,7 @@ pygame.display.set_caption("Old Style Terminal")
 
 FONT = pygame.font.SysFont("Courier New", 32)
 BIGFONT = pygame.font.SysFont("Courier New", 48)
+SMALLFONT = pygame.font.SysFont("Courier New", 20)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
@@ -165,6 +168,7 @@ def wrap_text(text, font, max_width):
     return lines
 
 def draw_selection(scene=0):
+    """Draw the current selection screen. Does NOT flip the display."""
     WIN.fill(BLACK)
     x = 50
     y = 50
@@ -189,11 +193,21 @@ def draw_selection(scene=0):
         # Add extra spacing between options
         y += 10
 
-    pygame.display.update()
+    # do not call pygame.display.update() here; caller will flip after any overlays
+
 
 # ---------- Main Loop ----------
-def run(name):
-    global selected, scene, checked
+def run(name: Optional[str] = None, start_ts: Optional[float] = None):
+    """
+    name: optional player name to show in the menu message
+    start_ts: optional epoch timestamp (float). If provided, the game will compute elapsed time
+              as time.time() - start_ts, display it during play, and include
+              'elapsed_seconds' in the JSON printed on exit.
+    """
+    global selected, scene, checked, menu_message
+    if name:
+        menu_message = f"Press ENTER to start, {name}"
+
     running = True
     result = {'action': 'exit'}
 
@@ -290,19 +304,48 @@ def run(name):
         if running:
             draw_selection(scene)
 
+            # If start_ts was provided, compute and display elapsed in top-left as MM:SS
+            if start_ts is not None:
+                try:
+                    elapsed = time.time() - float(start_ts)
+                    mins = int(elapsed) // 60
+                    secs = int(elapsed) % 60
+                    timer_str = f"{mins:02d}:{secs:02d}"
+                    small = SMALLFONT.render(f"Time: {timer_str}", True, YELLOW)
+                    WIN.blit(small, (8, 8))
+                except Exception:
+                    pass
+
+            # flip once per frame
+            pygame.display.flip()
+
     # end main loop -> cleanup
     try:
         pygame.quit()
     except Exception:
         pass
 
-    return result
+    # Construct output dict; include elapsed_seconds if start_ts provided
+    out = {'action': result.get('action', 'exit')}
+    if start_ts is not None:
+        try:
+            out['elapsed_seconds'] = round(time.time() - float(start_ts), 3)
+        except Exception:
+            pass
+
+    return out
 
 if __name__ == "__main__":
     # when run as a standalone script print a minimal JSON result so the launcher can parse it
     player_name = None
+    start_ts = None
     if len(sys.argv) > 1:
         player_name = sys.argv[1]
-    res = run(player_name)
-    out = {'action': res.get('action', 'exit')}
-    print(json.dumps(out))
+    if len(sys.argv) > 2:
+        try:
+            start_ts = float(sys.argv[2])
+        except Exception:
+            start_ts = None
+
+    res = run(player_name, start_ts)
+    print(json.dumps(res))
