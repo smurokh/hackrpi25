@@ -1,4 +1,4 @@
-import pygame, sys, os, math
+import pygame, sys, os, math, time, json
 
 pygame.init()
 
@@ -7,8 +7,7 @@ WIDTH, HEIGHT = 800, 600
 TICKRATE = 240
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 FPS = pygame.time.Clock()
-FPS.tick(TICKRATE)
-pygame.display.set_caption("Old Style Terminal")
+pygame.display.set_caption("Modern UI")
 
 FONT = pygame.font.SysFont("Courier New", 32)
 BIGFONT = pygame.font.SysFont("Courier New", 48)
@@ -19,14 +18,26 @@ GREY = (180, 180, 180)
 SCALE_FACTOR = 2.5e-3
 ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
-#Platform dimensions
+# Platform dimensions
 PLATFORM_HEIGHT = 20
 STD_GAP = 100
 
+PLAYER_NAME = ""
+START_TS = None
+
 def pendingCollision(obj, vel, group):
     future = obj
-    future.pos += vel
-    return pygame.sprite.spritecollide(future, group, False, pygame.sprite.collide_mask)
+    # create temporary copy for collision test: we use a shallow copy of rect and mask,
+    # but here existing code simply alters position; preserve behavior by using rect move
+    future.pos = Point(future.pos.x + vel.x, future.pos.y + vel.y)
+    future.rect = pygame.Rect(future.pos.x - future.rect.width//2, future.pos.y - future.rect.height//2,
+                              future.rect.width, future.rect.height)
+    hits = pygame.sprite.spritecollide(future, group, False, pygame.sprite.collide_mask)
+    # restore original rect/pos (we don't want to permanently move object)
+    future.pos = Point(future.pos.x - vel.x, future.pos.y - vel.y)
+    future.rect = pygame.Rect(future.pos.x - future.rect.width//2, future.pos.y - future.rect.height//2,
+                              future.rect.width, future.rect.height)
+    return hits
 
 def moveScene():
     global curScene
@@ -68,9 +79,9 @@ class Point():
 class Wall(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, img):
         super().__init__()
-        self.image = pygame.transform.scale(img, (width, height))
+        self.image = pygame.transform.scale(img, (int(width), int(height)))
         self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
+        self.rect.topleft = (int(x), int(y))
         self.mask = pygame.mask.from_surface(self.image)
     
     def draw(self, surface):
@@ -79,7 +90,7 @@ class Wall(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "player.png")).convert_alpha(), (30, 32)) #ALL ARGS PLACEHOLDERS
+        self.image = pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "player.png")).convert_alpha(), (30, 32))
         self.rect = self.image.get_rect()
         self.rect.topleft = (x - self.rect.width/2, y - self.rect.height/2)
         self.posInit = Point(x, y)
@@ -198,7 +209,9 @@ RIGIDBODIES = [
 ]
 
 def run(name):
-    global selected, scene, checked, curScene
+    global selected, scene, checked, curScene, PLAYER_NAME, START_TS
+    PLAYER_NAME = name or PLAYER_NAME or "Player"
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -210,13 +223,47 @@ def run(name):
         player.draw(WIN)
         for wall in RIGIDBODIES[curScene]:
             wall.draw(WIN)
+
+        name_surf = FONT.render(f"{PLAYER_NAME}", True, WHITE)
+        WIN.blit(name_surf, (10, 10))
+
+        if START_TS is not None:
+            elapsed = time.time() - float(START_TS)
+            mins = int(elapsed) // 60
+            secs = int(elapsed) % 60
+            timer_str = f"{mins:02d}:{secs:02d}"
+            timer_surf = FONT.render(timer_str, True, WHITE)
+            WIN.blit(timer_surf, (WIDTH - 10 - timer_surf.get_width(), 10))
+
         keys = pygame.key.get_pressed()
-        for key in keys:
-            if keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER]:
-                player.pos = Point(player.pos.x, player.posInit.y - player.rect.height//2)
-                curScene = 3
+        if keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER]:
+            player.pos = Point(player.pos.x, player.posInit.y - player.rect.height//2)
+            curScene = 3
+
+        if keys[pygame.K_ESCAPE]:
+            result = {'action': 'skipped'}
+            try:
+                if START_TS is not None:
+                    result['elapsed_seconds'] = round(time.time() - float(START_TS), 3)
+            except Exception:
+                pass
+            pygame.quit()
+            print(json.dumps(result))
+            sys.exit(0)
+
         FPS.tick(TICKRATE)
         pygame.display.update()
 
 if __name__ == "__main__":
-    run("")
+    if len(sys.argv) > 1:
+        PLAYER_NAME = sys.argv[1]
+    if len(sys.argv) > 2:
+        try:
+            START_TS = float(sys.argv[2])
+        except Exception:
+            START_TS = None
+
+    if not PLAYER_NAME:
+        PLAYER_NAME = ""
+
+    run(PLAYER_NAME)
