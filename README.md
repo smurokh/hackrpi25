@@ -1,4 +1,9 @@
-Run our project.
+# Time Escape
+
+### Overview
+Time Escape is an adventure puzzle escape game, where you play mini-games that transform from “retro” to “modern” as you play. Beginning with a text-based escape room, you must pass an 8-bit arcade puzzle, navigate Wiki links, beat Snakes & Ladders & PowerUps, escape an SMS chat, jump through a modern-style 2D platformer, and finally, give an AI chatbot the secret code. The games all vary in difficulty and skill required. Any game can be skipped by pressing the escape key. A speedrun stopwatch runs throughout the ~20 minute exciting playthrough.
+
+### Run our project
 1. Open a terminal in the project root.
 2. Create a venv and activate it:
    - macOS / Linux (bash/zsh):
@@ -22,7 +27,7 @@ Run our project.
    pip install -r requirements.txt
    ``` 
 4. Running the project
-   Run:
+- Run:
   ```
   python launcher.py
   ```
