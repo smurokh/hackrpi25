@@ -24,6 +24,11 @@
     "mode": "interactive"
   },
   {
+    "name": "sms",
+    "entry": "games/sms/sms_test.py",
+    "mode": "interactive"
+  },
+  {
     "name": "modern",
     "entry": "games/modern/modern_comp.py",
     "mode": "interactive"
