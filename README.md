@@ -26,7 +26,6 @@ Quick setup (Unix / macOS)
 Running the project
 
 - Run:
-  ```python launcher.py
   ```
-- Generate a simple top-level `launcher.py` that runs games in a sequence and consumes their JSON output, or
-- Add a small script to validate `links.json` (detect dead links) and print a report.
+  python launcher.py
+  ```
