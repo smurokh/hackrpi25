@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-"""
-games/links/links.py
-
-"Follow the links" demo (Wikipedia-like light mode).
-
-Usage:
-  python -u links.py [start_article_id] [timer_start_timestamp]
-
-- Loads games/links/links.json (an array of article objects with fields: id, title, content).
-- Token format supported inside content:
-    [[target_id|Link Text]]  or  [[Link Text|target_id]]  or  [[target_id]]
-  If the target id is missing from the dataset the link is treated as a dead link (404).
-- Start on the first article in the JSON by default, or pass an article id as argv[1].
-- Optional argv[2] = timer_start_timestamp (float epoch seconds) - if provided, elapsed_seconds included in final JSON.
-- Win when visiting the article with id "eap" (Edgar Allan Poe).
-- Prints a JSON result to stdout for the launcher when the game exits.
-"""
 from typing import List, Dict, Optional, Tuple, Any
 import pygame
 import sys
@@ -25,8 +7,8 @@ import re
 import time
 
 # UI constants
-SCREEN_W = 900
-SCREEN_H = 660
+SCREEN_W = 800
+SCREEN_H = 600
 FPS = 60
 
 MARGIN = 20
@@ -35,7 +17,7 @@ LEFT_COL_W = SCREEN_W - 2 * MARGIN
 
 TITLE_FONT_SIZE = 28
 BODY_FONT_SIZE = 18
-INFO_FONT_SIZE = 14
+INFO_FONT_SIZE = 20
 LINK_UNDERLINE = True
 
 BG = (250, 250, 250)  # light wiki-like background
@@ -73,12 +55,15 @@ def parse_content_into_segments(text: str, index: Dict[str, Any]) -> List[Dict[s
     """
     Parse content into a list of segments:
       {"type":"text", "text": "..."}
-      {"type":"link", "text":"...", "target":"id", "dead":bool, "visited":False, "rects":[]}
+      {"type":"link", "text":"...", "target":"id", "dead":bool, "visited":False, "rects":[], "trailing_space":bool}
     Accepts token forms:
       [[target|Link Text]] OR [[Link Text|target]] OR [[target]]
 
     For two-part tokens [[a|b]] when neither a nor b matches an id:
       treat a as target and b as display text (so [[dead_link|systems]] shows "systems" linking to dead_link).
+
+    Adds "trailing_space" flag to link segments: True if original content had whitespace immediately after the token.
+    This lets rendering avoid inserting a visible space before punctuation that follows a link.
     """
     segments = []
     last = 0
@@ -111,13 +96,20 @@ def parse_content_into_segments(text: str, index: Dict[str, Any]) -> List[Dict[s
                 target = a
                 seg_text = b
                 dead = True
+
+        # Determine whether there is whitespace immediately after the token in the original text
+        trailing_space = False
+        if m.end() < len(text):
+            trailing_space = text[m.end()].isspace()
+
         segments.append({
             "type": "link",
             "text": seg_text,
             "target": target,
             "dead": dead,
             "visited": False,
-            "rects": []
+            "rects": [],
+            "trailing_space": trailing_space
         })
         last = m.end()
     if last < len(text):
@@ -150,6 +142,8 @@ def _merge_rects_on_same_line(rects: List[pygame.Rect], line_tol: int = 3) -> Li
             merged.append(r.copy())
     return merged
 
+_TOKEN_WITH_SPACES_RE = re.compile(r'(\S+)(\s*)', re.U)
+
 def render_wrapped_segments(segments: List[Dict[str, Any]],
                             font: pygame.font.Font,
                             max_width: int,
@@ -157,8 +151,9 @@ def render_wrapped_segments(segments: List[Dict[str, Any]],
     """
     Renders segments into a Surface with wrapped lines and returns (surface, height)
     Also populates 'rects' in link segments with pixel rects relative to the surface.
-    Link rects are merged per visual line so each fragment of a multi-word link
-    becomes a contiguous clickable area for that line.
+    Link rects and underlines tightly fit link text (no surrounding spaces).
+    Spacing is rendered as separate glyphs and only inserted when the original content had spaces,
+    avoiding gaps before punctuation that immediately follows a link token.
     """
     surface = pygame.Surface((max_width, 4000), pygame.SRCALPHA)
     surface.fill((0,0,0,0))
@@ -170,47 +165,80 @@ def render_wrapped_segments(segments: List[Dict[str, Any]],
         if seg["type"] == "link":
             seg["rects"] = []
 
-    words_cache = {}
+    words_cache: Dict[Tuple[str, Tuple[int,int,int]], pygame.Surface] = {}
 
-    def render_word(s: str, color):
+    def render_word_surface(s: str, color: Tuple[int,int,int]) -> pygame.Surface:
         key = (s, color)
         if key not in words_cache:
             words_cache[key] = font.render(s, True, color)
         return words_cache[key]
 
-    for seg in segments:
+    for i, seg in enumerate(segments):
         if seg["type"] == "text":
-            text = seg["text"].replace("\n", " \n ")
-            words = text.split(" ")
-            for w in words:
-                if w == "":
-                    w = " "
-                if w == "\n":
-                    x = 0
-                    y += line_h
-                    continue
-                surf = render_word(w + " ", TEXT_COLOR)
-                w_w = surf.get_width()
-                if x + w_w > max_width and x > 0:
-                    x = 0
-                    y += line_h
-                surface.blit(surf, (x, y))
-                x += w_w
-        else:
-            color = LINK_PURPLE if seg.get("visited", False) else LINK_BLUE
             text = seg["text"]
-            words = text.split(" ")
-            for w in words:
-                if w == "":
-                    w = " "
-                surf = render_word(w + " ", color)
-                w_w = surf.get_width()
-                if x + w_w > max_width and x > 0:
+            # tokenise into (token, following_whitespace) pairs preserving punctuation
+            for m in _TOKEN_WITH_SPACES_RE.finditer(text):
+                token = m.group(1)
+                following_space = m.group(2)  # may be ''
+                # render token (no trailing space included)
+                token_surf = render_word_surface(token, TEXT_COLOR)
+                space_surf = render_word_surface(" ", TEXT_COLOR) if following_space else None
+                total_w = token_surf.get_width() + (space_surf.get_width() if space_surf else 0)
+                if x + total_w > max_width and x > 0:
                     x = 0
                     y += line_h
-                surface.blit(surf, (x, y))
-                seg["rects"].append(pygame.Rect(x, y, w_w, surf.get_height()))
-                x += w_w
+                surface.blit(token_surf, (x, y))
+                if space_surf:
+                    surface.blit(space_surf, (x + token_surf.get_width(), y))
+                x += total_w
+        else:
+            # link segment
+            color = LINK_PURPLE if seg.get("visited", False) else LINK_BLUE
+            link_text = seg["text"]
+            # tokenize link text but do NOT assume a trailing space after the whole link;
+            # we'll only render a space after the final word if either the link text had one
+            # or the original content had whitespace immediately after the token (seg['trailing_space'])
+            tokens = list(_TOKEN_WITH_SPACES_RE.finditer(link_text))
+            for idx, m2 in enumerate(tokens):
+                token = m2.group(1)
+                following_space_inside_link = m2.group(2)  # internal space inside displayed link text
+                token_surf = render_word_surface(token, color)
+                space_surf_inside = render_word_surface(" ", color) if following_space_inside_link else None
+
+                # decide whether to include a post-word space (affects wrapping calculations)
+                include_space_after = False
+                # If there is an internal space in link text after this token, include it.
+                if following_space_inside_link:
+                    include_space_after = True
+                else:
+                    # if this is the last token in the link, include space AFTER the link
+                    # only if the original content had whitespace immediately after the token
+                    if idx == len(tokens) - 1 and seg.get("trailing_space", False):
+                        include_space_after = True
+                total_w = token_surf.get_width() + (space_surf_inside.get_width() if include_space_after and space_surf_inside else (font.size(" ")[0] if include_space_after else 0))
+
+                if x + total_w > max_width and x > 0:
+                    x = 0
+                    y += line_h
+
+                # blit the token (no trailing space inside the token's rect)
+                surface.blit(token_surf, (x, y))
+                # record rect for token itself (exclude the space)
+                seg["rects"].append(pygame.Rect(x, y, token_surf.get_width(), token_surf.get_height()))
+
+                # blit the space glyph if we decided to include one
+                if include_space_after:
+                    # prefer rendering the same-color space (space_surf_inside) if present, otherwise render a plain space
+                    if space_surf_inside:
+                        surface.blit(space_surf_inside, (x + token_surf.get_width(), y))
+                        x += token_surf.get_width() + space_surf_inside.get_width()
+                    else:
+                        # render default space in the same color
+                        space_surf = render_word_surface(" ", color)
+                        surface.blit(space_surf, (x + token_surf.get_width(), y))
+                        x += token_surf.get_width() + space_surf.get_width()
+                else:
+                    x += token_surf.get_width()
 
     # Merge per-line rects so underline and hit area are continuous for multi-word links
     for seg in segments:
@@ -238,26 +266,26 @@ class LinksGame:
         pygame.init()
         pygame.font.init()
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-        pygame.display.set_caption("Links — follow the links")
+        pygame.display.set_caption("Wikipedia")
         self.clock = pygame.time.Clock()
 
         # fonts (serif body like Wikipedia)
         try:
-            self.header_font = pygame.font.SysFont("Georgia", 34, bold=True)
-            self.subheader_font = pygame.font.SysFont("Arial", 16)
+            self.header_font = pygame.font.SysFont("Georgia", 40, bold=True)
+            self.subheader_font = pygame.font.SysFont("Times New Roman", 22)
             self.title_font = pygame.font.SysFont("Georgia", TITLE_FONT_SIZE, bold=True)
             self.body_font = pygame.font.SysFont("Times New Roman", BODY_FONT_SIZE)
             self.info_font = pygame.font.SysFont("Arial", INFO_FONT_SIZE)
         except Exception:
-            self.header_font = pygame.font.SysFont(None, 34, bold=True)
-            self.subheader_font = pygame.font.SysFont(None, 16)
+            self.header_font = pygame.font.SysFont(None, 40, bold=True)
+            self.subheader_font = pygame.font.SysFont(None, 25)
             self.title_font = pygame.font.SysFont(None, TITLE_FONT_SIZE, bold=True)
             self.body_font = pygame.font.SysFont(None, BODY_FONT_SIZE)
             self.info_font = pygame.font.SysFont(None, INFO_FONT_SIZE)
 
         # header surfaces and height
         self.header_surf = self.header_font.render(HEADER_TEXT, True, TITLE_COLOR)
-        self.subheader_surf = self.subheader_font.render(SUBHEADER_TEXT, True, TEXT_COLOR)
+        self.subheader_surf = self.subheader_font.render(SUBHEADER_TEXT, True, LINK_BLUE)
         # small spacing
         self.header_total_h = self.header_surf.get_height() + self.subheader_surf.get_height() + 12
 
