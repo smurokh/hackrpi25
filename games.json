@@ -13,6 +13,10 @@
     "name": "snakes",
     "entry": "games/snakes/snakes_and_ladders.py",
     "mode": "interactive"
+  },
+  {
+    "name": "ai",
+    "entry": "games/ai/ai.py",
+    "mode": "interactive"
   }
-  
 ]
