@@ -42,13 +42,16 @@ def read_instructions(screen,g_font, s_font, name,w,h, scroll):
         for event in p.event.get():
             if event.type == p.QUIT:
                 run = False
-                return
+                return None
+            
+            if event.type == p.KEYDOWN and event.key == p.K_ESCAPE:
+                return 'skip'
             
             # if play_butt button is pressed, open level and cllse this window
             if event.type == p.MOUSEBUTTONDOWN:
                 if play_bttn.collidepoint(event.pos):
                     run = False
-                    return
+                    return None
    
         if opened == False:
             #making scroll
@@ -165,7 +168,10 @@ def run_8bit(player_name,start_ts):
     
     read = True
     if read:
-        read_instructions(screen,game_font, small_font, player_name,WIDTH,HEIGHT,scroll) 
+        r = read_instructions(screen,game_font, small_font, player_name,WIDTH,HEIGHT,scroll) 
+        if r == 'skip':
+            p.quit()
+            return {'action': 'finished', 'elapsed_seconds': round(time.time() - float(start_ts), 3)} if start_ts is not None else {'action': 'finished'}
         read = False
     
     run = True
@@ -178,7 +184,9 @@ def run_8bit(player_name,start_ts):
         for event in p.event.get():
             if event.type == p.QUIT:
                 run = False
-
+            if event.type == p.KEYDOWN and event.key == p.K_ESCAPE:
+                run = False
+                result = {'action': 'finished'}
             if event.type == p.MOUSEBUTTONDOWN and nxt_lvl.collidepoint(event.pos) and key_found == True:
                 run  = False
                 result = {'action': 'finished'}
@@ -226,7 +234,6 @@ def run_8bit(player_name,start_ts):
         
             
         p.display.update()     
-
     
     p.quit()
     # include elapsed_seconds if start_ts present
