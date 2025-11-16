@@ -6,8 +6,8 @@ Time Escape is an adventure puzzle escape game, where you play mini-games that t
 ### Run our project
 1. Open a terminal, clone the repo, and navigate in.
       ```bash
-     git clone
-      cd 
+     git clone https://github.com/smurokh/hackrpi25.git
+      cd hackrpi25
      ```
 3. Create a venv and activate it:
    - macOS / Linux (bash/zsh):
@@ -30,8 +30,7 @@ Time Escape is an adventure puzzle escape game, where you play mini-games that t
    python -m pip install --upgrade pip
    pip install -r requirements.txt
    ``` 
-5. Running the project
-- Run:
-  ```
+5. Run the project
+   ```
   python launcher.py
   ```
