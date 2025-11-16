@@ -31,6 +31,6 @@ Time Escape is an adventure puzzle escape game, where you play mini-games that t
    pip install -r requirements.txt
    ``` 
 5. Run the project
-   ```
+   ```bash
   python launcher.py
   ```
