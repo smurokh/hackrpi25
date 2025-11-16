@@ -21,7 +21,7 @@ FPS = 60
 # Colors - updated visuals (tiles -> light grays, ladders -> brown, snakes -> crimson)
 BACKGROUND = (170, 200, 230)          # background behind board
 TILE_LIGHT = (246, 246, 246)          # very light gray
-TILE_DARK = (236, 236, 236)           # slightly darker light gray
+TILE_DARK = (216, 216, 216)           # slightly darker light gray
 GREEN = (139, 69, 19)                 # ladder color -> brown (kept name GREEN for compatibility)
 RED = (220, 20, 60)                   # snake color -> crimson (kept name RED for compatibility)
 BLUE = (50, 50, 200)
