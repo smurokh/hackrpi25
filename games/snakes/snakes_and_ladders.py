@@ -1,19 +1,3 @@
-#!/usr/bin/env python3
-"""
-snakes_and_ladders.py
-
-Single-player Snakes & Ladders implemented with pygame.
-
-This variant accepts optional argv:
-  argv[1] = player_name (unused here)
-  argv[2] = timer_start_timestamp (float epoch seconds) - optional
-
-If TIMER_START is provided, the game displays a live minutes:seconds timer
-in the top-right corner and returns {'action':..., 'elapsed_seconds': <float>}
-when it exits.
-
-When executed as a script it prints a small JSON result to stdout for the launcher.
-"""
 from typing import Optional
 import pygame
 import sys
@@ -34,12 +18,12 @@ CELL_SIZE = BOARD_SIZE // CELL_COUNT
 
 FPS = 60
 
-# Colors - updated visuals
-BACKGROUND = (170, 200, 230)          # lighter, less dull blue
-PASTEL_PINK = (255, 223, 230)         # cell color A
-PASTEL_GREEN = (205, 245, 220)        # cell color B
-GREEN = (50, 200, 50)                 # ladder color
-RED = (200, 50, 50)                   # snake color
+# Colors - updated visuals (tiles -> light grays, ladders -> brown, snakes -> crimson)
+BACKGROUND = (170, 200, 230)          # background behind board
+TILE_LIGHT = (246, 246, 246)          # very light gray
+TILE_DARK = (236, 236, 236)           # slightly darker light gray
+GREEN = (139, 69, 19)                 # ladder color -> brown (kept name GREEN for compatibility)
+RED = (220, 20, 60)                   # snake color -> crimson (kept name RED for compatibility)
 BLUE = (50, 50, 200)
 GOLD = (215, 170, 30)
 BLACK = (0, 0, 0)
@@ -74,6 +58,9 @@ JUMPS = {
 
 # Module-level optional timer start (set by launcher via argv[2] when running as script)
 TIMER_START: Optional[float] = None
+
+# Module-level player icon (will be set in run_flash if raven.png available)
+player_icon = None  # pygame.Surface or None
 
 # -------------------------
 # Helper functions (pure)
@@ -147,7 +134,8 @@ def compute_snake_curve(start_cell, end_cell):
     p3 = (ex, ey)
     p1 = (sx + ux * (dist * 0.25) + px * curvature * sign, sy + uy * (dist * 0.25) + py * curvature * sign)
     p2 = (sx + ux * (dist * 0.75) - px * curvature * sign, sy + uy * (dist * 0.75) - py * curvature * sign)
-    pts = sample_cubic_bezier(p0, p1, p2, p3, samples=max(18, int(dist // 4)))
+    # increase samples for smoother curve
+    pts = sample_cubic_bezier(p0, p1, p2, p3, samples=max(28, int(dist // 3)))
     return pts
 
 def compute_ladder_rungs_and_rails(start_cell, end_cell):
@@ -190,6 +178,68 @@ def get_jump_path_points(start_cell, end_cell):
         return [(int(lerp(sx, ex, t / (steps - 1))), int(lerp(sy, ey, t / (steps - 1)))) for t in range(steps)]
 
 # -------------------------
+# Snake smoothing helper
+# -------------------------
+
+def _draw_smooth_thick_path(surface, pts, color, thickness):
+    """
+    Draw a smooth thick path by building a polygon 'tube' around a centerline.
+    This reduces pixelation compared to pygame.draw.lines with large widths.
+    """
+    if not pts or len(pts) < 2:
+        return
+    try:
+        half = float(thickness) / 2.0
+        n_pts = len(pts)
+        normals = []
+        # compute smoothed normals
+        for i in range(n_pts):
+            if i == 0:
+                x0, y0 = pts[0]
+                x1, y1 = pts[1]
+                vx, vy = x1 - x0, y1 - y0
+            elif i == n_pts - 1:
+                x0, y0 = pts[-2]
+                x1, y1 = pts[-1]
+                vx, vy = x1 - x0, y1 - y0
+            else:
+                x_prev, y_prev = pts[i - 1]
+                x_next, y_next = pts[i + 1]
+                vx, vy = x_next - x_prev, y_next - y_prev
+            length = math.hypot(vx, vy)
+            if length == 0:
+                nx, ny = 0.0, 0.0
+            else:
+                nx, ny = -vy / length, vx / length
+            normals.append((nx, ny))
+
+        left = []
+        right = []
+        for (px, py), (nx, ny) in zip(pts, normals):
+            lx = px + nx * half
+            ly = py + ny * half
+            rx = px - nx * half
+            ry = py - ny * half
+            left.append((lx, ly))
+            right.append((rx, ry))
+
+        poly = left + list(reversed(right))
+        # fill polygon
+        pygame.draw.polygon(surface, color, poly)
+        # outline with a slightly darker color for depth
+        outline = tuple(max(0, c - 40) for c in color)
+        try:
+            pygame.draw.aalines(surface, outline, True, poly)
+        except Exception:
+            pygame.draw.lines(surface, outline, True, poly, 1)
+    except Exception:
+        # fallback if something fails: draw simple lines
+        try:
+            pygame.draw.lines(surface, color, False, pts, int(thickness))
+        except Exception:
+            pass
+
+# -------------------------
 # Drawing routines (use fonts defined in run_flash)
 # -------------------------
 
@@ -201,9 +251,28 @@ def draw_board(surface, font_small):
             rect = pygame.Rect(BOARD_PADDING + c * CELL_SIZE,
                                BOARD_PADDING + r * CELL_SIZE,
                                CELL_SIZE, CELL_SIZE)
-            color = PASTEL_PINK if (r + c) % 2 == 0 else PASTEL_GREEN
+            # alternate light gray tiles
+            color = TILE_LIGHT if (r + c) % 2 == 0 else TILE_DARK
             pygame.draw.rect(surface, color, rect)
             pygame.draw.rect(surface, BLACK, rect, 1)
+    # Note: grid numbers are drawn separately so they can be layered above snakes
+
+def draw_snakes(surface):
+    """Draw all snake paths (they will be drawn first so other elements can be layered above)."""
+    # thinner snakes: 3/4 of previous width (previous approx 14 -> now 11)
+    snake_thickness = max(3, int(round(14 * 0.75)))
+    for start, end in JUMPS.items():
+        if end < start:
+            pts = compute_snake_curve(start, end)
+            if len(pts) >= 2:
+                _draw_smooth_thick_path(surface, pts, RED, thickness=snake_thickness)
+            else:
+                sx, sy = cell_index_to_coord(start)
+                ex, ey = cell_index_to_coord(end)
+                pygame.draw.line(surface, RED, (sx, sy), (ex, ey), snake_thickness)
+
+def draw_grid_numbers(surface, font_small):
+    # Draw grid numbers on top of the board (so they appear above snakes)
     for cell in range(1, 101):
         x, y = cell_index_to_coord(cell)
         text = font_small.render(str(cell), True, BLACK)
@@ -211,28 +280,43 @@ def draw_board(surface, font_small):
         ty = y - CELL_SIZE // 2 + 2
         surface.blit(text, (tx, ty))
 
-def draw_jumps(surface, font_small):
+def draw_ladders(surface):
+    """Draw ladders after snakes and grid numbers, so ladders appear above snakes."""
     for start, end in JUMPS.items():
-        sx, sy = cell_index_to_coord(start)
-        ex, ey = cell_index_to_coord(end)
         if end > start:
             rail1_start, rail1_end, rail2_start, rail2_end, rung_points = compute_ladder_rungs_and_rails(start, end)
+            # draw ladder rails and rungs in brown (GREEN variable)
             pygame.draw.line(surface, GREEN, rail1_start, rail1_end, 5)
             pygame.draw.line(surface, GREEN, rail2_start, rail2_end, 5)
             for a, b in rung_points:
                 pygame.draw.line(surface, GREEN, a, b, 3)
-        else:
-            pts = compute_snake_curve(start, end)
-            if len(pts) >= 2:
-                pygame.draw.lines(surface, RED, False, pts, 14)
-            else:
-                pygame.draw.line(surface, RED, (sx, sy), (ex, ey), 14)
-        label = font_small.render(str(start), True, BLACK)
-        surface.blit(label, (sx - 10, sy - 10))
+
+def draw_jumps(surface, font_small):
+    """
+    Backwards-compatible wrapper that draws snakes, grid numbers, then ladders.
+    Kept for callers that used draw_jumps previously; it orchestrates the correct order.
+    """
+    # draw snakes first (below)
+    draw_snakes(surface)
+    # draw grid numbers above the snakes
+    draw_grid_numbers(surface, font_small)
+    # draw ladders above snakes and above grid numbers
+    draw_ladders(surface)
 
 def draw_player(surface, pos, player_color, radius=12):
-    pygame.draw.circle(surface, BLACK, pos, radius + 2)
-    pygame.draw.circle(surface, player_color, pos, radius)
+    """
+    Draw the player token at pos (center). If a player_icon has been loaded,
+    blit it centered; otherwise fall back to drawing a filled circle with outline.
+    """
+    global player_icon
+    if player_icon:
+        iw = player_icon.get_width()
+        ih = player_icon.get_height()
+        top_left = (int(pos[0] - iw // 2), int(pos[1] - ih // 2))
+        surface.blit(player_icon, top_left)
+    else:
+        pygame.draw.circle(surface, BLACK, pos, radius + 2)
+        pygame.draw.circle(surface, player_color, pos, radius)
 
 def draw_dice(surface, rect, face, font, dice_images):
     pygame.draw.rect(surface, BLACK, rect)
@@ -269,20 +353,26 @@ def run_flash(on_finish=None, width=800, height=600):
     clock = pygame.time.Clock()
 
     # fonts (set globals used by draw functions)
-    global font_small, font_medium, font_large, font_dice, dice_rect
-    font_small = pygame.font.SysFont("arial", 14)
+    global font_small, font_medium, font_large, font_dice, dice_rect, player_icon
+    font_small = pygame.font.SysFont("arial", 14)      # kept small for compact UI text
     font_medium = pygame.font.SysFont("arial", 20, bold=True)
     font_large = pygame.font.SysFont("arial", 44, bold=True)
     font_dice = pygame.font.SysFont("arial", 36, bold=True)
+    # larger font for the instruction block (user requested bigger instructions)
+    font_info = pygame.font.SysFont("arial", 16)      # increased from 14 -> 16
 
     # Layout rectangles (placed relative to board)
     DICE_WIDTH = 220
     DICE_HEIGHT = 200
-    # Move the dice box down to make room if desired; keep enough room above for timer/title
+    # Move the dice box down to make room for timer/title
     dice_rect_local = pygame.Rect(BOARD_PADDING + BOARD_SIZE + 16, BOARD_PADDING + 24 + 40, DICE_WIDTH, DICE_HEIGHT)
     info_rect_local = pygame.Rect(dice_rect_local.x, dice_rect_local.y + dice_rect_local.height + 12, 240, 300)
-    btn_mini_local = pygame.Rect(info_rect_local.x, info_rect_local.y + info_rect_local.height - 100, 140, 36)
-    btn_swap_local = pygame.Rect(info_rect_local.x + 150, info_rect_local.y + info_rect_local.height - 100, 110, 36)
+
+    # Move power-up buttons down (user requested)
+    # Previously: y = info_rect_local.y + info_rect_local.height - 100
+    # New: move down by ~40 pixels to give more separation
+    btn_mini_local = pygame.Rect(info_rect_local.x, info_rect_local.y + info_rect_local.height - 150, 130, 36)
+    btn_swap_local = pygame.Rect(info_rect_local.x + 150, info_rect_local.y + info_rect_local.height - 150, 130, 36)
 
     # Make dice_rect available to helper functions that reference the module-level name
     dice_rect = dice_rect_local
@@ -302,6 +392,22 @@ def run_flash(on_finish=None, width=800, height=600):
             images_loaded_local = False
             dice_images_local = {}
             break
+
+    # Load player icon (raven.png) if available. Scale to TOKEN_SIZE.
+    player_icon = None
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else "."
+        raven_path = os.path.join(base_dir, "snakes_assets", "raven.png")
+        if os.path.exists(raven_path):
+            raw_icon = pygame.image.load(raven_path).convert_alpha()
+            # desired token size (diameter). Adjust as needed.
+            TOKEN_SIZE = 42
+            if raw_icon.get_width() != TOKEN_SIZE or raw_icon.get_height() != TOKEN_SIZE:
+                player_icon = pygame.transform.smoothscale(raw_icon, (TOKEN_SIZE, TOKEN_SIZE))
+            else:
+                player_icon = raw_icon
+    except Exception:
+        player_icon = None
 
     # Player state
     player = {
@@ -454,6 +560,7 @@ def run_flash(on_finish=None, width=800, height=600):
                     if swap_first is None:
                         swap_first = clicked_cell
                         message = f"First tile selected: {swap_first}. Click adjacent tile to swap or click elsewhere to cancel."
+                        continue
                     else:
                         first = swap_first
                         second = clicked_cell
@@ -491,7 +598,16 @@ def run_flash(on_finish=None, width=800, height=600):
         # draw frame
         screen.fill(BACKGROUND)
         draw_board(screen, font_small)
-        draw_jumps(screen, font_small)
+
+        # Draw snakes first (below)
+        draw_snakes(screen)
+
+        # Draw grid numbers above snakes
+        draw_grid_numbers(screen, font_small)
+
+        # Draw ladders above snakes and numbers
+        draw_ladders(screen)
+
         px, py = cell_index_to_coord(player['square'])
         draw_player(screen, (px, py), player['color'])
 
@@ -518,43 +634,35 @@ def run_flash(on_finish=None, width=800, height=600):
         title_y = dice_rect_local.y - title.get_height() - 8
         screen.blit(title, (title_x, title_y))
 
-        # info lines
+        # info lines (rendered with larger instruction font)
         info_lines = [
             message,
             "",
-            "Controls:",
-            "- Click dice or press SPACE to roll",
-            "- Press M or click Mini Ladder to use mini-ladder (x2)",
-            "- Press S or click Swap Tiles to enter swap mode (x3)",
-            "- Press R to reset, ESC to quit/skip level",
-            "",
+            "- Mini Ladder: Launch a ladder 3 squares up",
+            "- Swap Tiles: Swap two adjacent tiles,",
+            "changing snakes and ladders",
         ]
         iy = info_rect_local.y
         for line in info_lines:
-            text = font_small.render(line, True, BLACK)
+            text = font_info.render(line, True, BLACK)
             screen.blit(text, (info_rect_local.x, iy))
             iy += text.get_height() + 6
 
-        # draw buttons
+        # draw buttons (moved down)
         pygame.draw.rect(screen, BUTTON_BG, btn_mini_local)
         pygame.draw.rect(screen, BUTTON_BORDER, btn_mini_local, 1)
-        ms_text = font_small.render(f"Mini Ladder (M) x{player['mini_ladder_count']}", True, BLACK)
+        ms_text = font_small.render(f"Mini Ladder (M) - {player['mini_ladder_count']} left", True, BLACK)
         screen.blit(ms_text, (btn_mini_local.x + 6, btn_mini_local.y + 8))
 
         pygame.draw.rect(screen, BUTTON_BG, btn_swap_local)
         pygame.draw.rect(screen, BUTTON_BORDER, btn_swap_local, 1)
-        sw_text = font_small.render(f"Swap Tiles (S) x{player['swap_tiles_count']}", True, BLACK)
+        sw_text = font_small.render(f"Swap Tiles (S) - {player['swap_tiles_count']} left", True, BLACK)
         screen.blit(sw_text, (btn_swap_local.x + 6, btn_swap_local.y + 8))
 
         if swap_mode and swap_first:
             cx, cy = cell_index_to_coord(swap_first)
             rect = pygame.Rect(cx - CELL_SIZE // 2, cy - CELL_SIZE // 2, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, HIGHLIGHT, rect, 4)
-
-        ladder_txt = font_small.render("Green = Ladder (up)", True, BLACK)
-        snake_txt = font_small.render("Red = Snake (down)", True, BLACK)
-        screen.blit(ladder_txt, (dice_rect_local.x, info_rect_local.y + info_rect_local.height - 54))
-        screen.blit(snake_txt, (dice_rect_local.x, info_rect_local.y + info_rect_local.height - 32))
 
         if swap_mode and not swap_first:
             prompt = font_medium.render("Swap mode: click first tile", True, BLACK)
@@ -617,7 +725,10 @@ def roll_dice_animation_impl(screen, dice_rect, font_dice, player_pos, player_co
         if face != last:
             screen.fill(BACKGROUND)
             draw_board(screen, font_small)
-            draw_jumps(screen, font_small)
+            # draw snakes first so animation still looks consistent
+            draw_snakes(screen)
+            draw_grid_numbers(screen, font_small)
+            draw_ladders(screen)
             px, py = cell_index_to_coord(player_pos['square'])
             draw_player(screen, (px, py), player_color)
             draw_dice(screen, dice_rect, face, font_dice, dice_images)
@@ -627,7 +738,9 @@ def roll_dice_animation_impl(screen, dice_rect, font_dice, player_pos, player_co
     final = random.randint(1, 6)
     screen.fill(BACKGROUND)
     draw_board(screen, font_small)
-    draw_jumps(screen, font_small)
+    draw_snakes(screen)
+    draw_grid_numbers(screen, font_small)
+    draw_ladders(screen)
     px, py = cell_index_to_coord(player_pos['square'])
     draw_player(screen, (px, py), player_color)
     draw_dice(screen, dice_rect, final, font_dice, dice_images)
@@ -643,7 +756,9 @@ def move_player_along_numeric_impl(player_pos, target_square, surface, player_co
         pos = cell_index_to_coord(sq)
         surface.fill(BACKGROUND)
         draw_board(surface, font_small)
-        draw_jumps(surface, font_small)
+        draw_snakes(surface)
+        draw_grid_numbers(surface, font_small)
+        draw_ladders(surface)
         draw_player(surface, pos, player_color)
         draw_dice(surface, dice_rect, player_pos.get('last_roll', None), font_dice, dice_images)
         pygame.display.flip()
@@ -659,7 +774,9 @@ def animate_along_path_impl(player_pos, start_sq, end_sq, surface, player_color,
         ix, iy = p
         surface.fill(BACKGROUND)
         draw_board(surface, font_small)
-        draw_jumps(surface, font_small)
+        draw_snakes(surface)
+        draw_grid_numbers(surface, font_small)
+        draw_ladders(surface)
         draw_player(surface, (ix, iy), player_color)
         draw_dice(surface, dice_rect, player_pos.get('last_roll', None), font_dice, dice_images)
         pygame.display.flip()
