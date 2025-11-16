@@ -104,13 +104,15 @@ class Player(pygame.sprite.Sprite):
     def update(self):
         collisions = pendingCollision(self, self.velocity, RIGIDBODIES[curScene])
         
-        self.velocity += Point(0, 1.8 * SCALE_FACTOR)  # gravity effect
+        self.velocity += Point(0, 4 * SCALE_FACTOR)  # gravity effect
         keys = pygame.key.get_pressed()
         # horizontal motion
         if keys[pygame.K_LEFT]:
             self.velocity += Point(-2, 0) * SCALE_FACTOR
         if keys[pygame.K_RIGHT]:
             self.velocity += Point(2, 0) * SCALE_FACTOR
+        if keys[pygame.K_DOWN]:
+            self.velocity += Point(0, 3) * SCALE_FACTOR
         # slow down, required due to the fun ice physics
         if len(collisions) != 0:
             if keys[pygame.K_LSHIFT]:
@@ -120,13 +122,13 @@ class Player(pygame.sprite.Sprite):
         for wall in collisions:
             # jump
             if keys[pygame.K_UP] and abs(self.rect.bottom - wall.rect.top) < 10 and self.velocity.y >= 0:
-                self.velocity += Point(0, -0.8)
+                self.velocity += Point(0, -2)
             elif keys[pygame.K_SPACE] and abs(self.rect.left - wall.rect.right) < 10:
-                self.velocity.x += math.sqrt(0.05)
-                self.velocity.y -= math.sqrt(0.05)
+                self.velocity.x += math.sqrt(0.2)
+                self.velocity.y -= math.sqrt(0.2)
             elif keys[pygame.K_SPACE] and abs(self.rect.right - wall.rect.left) < 10:
-                self.velocity.x -= math.sqrt(0.05)
-                self.velocity.y -= math.sqrt(0.05)
+                self.velocity.x -= math.sqrt(0.2)
+                self.velocity.y -= math.sqrt(0.2)
         # after updating velocity, check for collisions again
         collisions = pendingCollision(self, self.velocity, RIGIDBODIES[curScene])
         for wall in collisions:

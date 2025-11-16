@@ -81,7 +81,7 @@ options = {
         "Back"
     ],
     "Enter code" : [
-        "These are the combinations you came up with. Which do you try? ",
+        "What code will you try? ",
         "STAIRS",
         "SITRAS",
         "TIRSSA",
@@ -98,7 +98,7 @@ options = {
         "Back"
     ],
     "Insert Key" : [
-        "You insert the key into the door lock, and it clicks open. Do you proceed and see what lies in wait? ",
+        "You insert the key into the door lock, and it clicks open. Proceed, and see what lies in wait for you. ",
         "Move forward"
     ]
 }
