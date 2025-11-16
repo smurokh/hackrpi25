@@ -66,10 +66,9 @@ class Point():
         return Point(self.x * scalar, self.y * scalar)
 
 class Wall(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height):
+    def __init__(self, x, y, width, height, img):
         super().__init__()
-        self.image = pygame.Surface((width, height))
-        self.image.fill(WALL)
+        self.image = pygame.transform.scale(img, (width, height))
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
         self.mask = pygame.mask.from_surface(self.image)
@@ -80,7 +79,7 @@ class Wall(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "PLACEHOLDER.png")), (26, 24)) #ALL ARGS PLACEHOLDERS
+        self.image = pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "player.png")).convert_alpha(), (30, 32)) #ALL ARGS PLACEHOLDERS
         self.rect = self.image.get_rect()
         self.rect.topleft = (x - self.rect.width/2, y - self.rect.height/2)
         self.posInit = Point(x, y)
@@ -143,46 +142,58 @@ class Player(pygame.sprite.Sprite):
         if self.rect.right > WIDTH:
             self.pos = Point(self.posInit.x, self.posInit.y - self.rect.height//2)
 
+bgs = [
+    pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "stg1_bg.png")).convert(), (WIDTH, HEIGHT)),
+    pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "stg2_bg.png")).convert(), (WIDTH, HEIGHT)),
+    pygame.transform.scale(pygame.image.load(os.path.join(ASSET_DIR, "stg3_bg.png")).convert(), (WIDTH, HEIGHT))
+    ]
+stg1_horizontal = pygame.image.load(os.path.join(ASSET_DIR, "stg1_horizontal.png")).convert()
+stg2_horizontal = pygame.image.load(os.path.join(ASSET_DIR, "stg2_horizontal.png")).convert()
+stg3_horizontal = pygame.image.load(os.path.join(ASSET_DIR, "stg3_horizontal.png")).convert()
+stg1_vertical = pygame.image.load(os.path.join(ASSET_DIR, "stg1_vertical.png")).convert()
+stg2_vertical = pygame.image.load(os.path.join(ASSET_DIR, "stg2_vertical.png")).convert()
+stg3_vertical = pygame.image.load(os.path.join(ASSET_DIR, "stg3_vertical.png")).convert()
+
 player = Player(150, HEIGHT)
 curScene = 0
 BOUND_WIDTH = 50
 BOUNDARIES = [
-    Wall(0, HEIGHT, WIDTH + BOUND_WIDTH * 2, BOUND_WIDTH), # lower boundary
-    Wall(-BOUND_WIDTH, -BOUND_WIDTH, BOUND_WIDTH, HEIGHT + BOUND_WIDTH * 2), # left boundary
-    Wall(WIDTH, 0, BOUND_WIDTH, HEIGHT + BOUND_WIDTH * 2) # right boundary
+    Wall(0, HEIGHT, WIDTH + BOUND_WIDTH * 2, BOUND_WIDTH, stg1_horizontal), # lower boundary
+    Wall(-BOUND_WIDTH, -BOUND_WIDTH, BOUND_WIDTH, HEIGHT + BOUND_WIDTH * 2, stg1_vertical), # left boundary
+    Wall(WIDTH, 0, BOUND_WIDTH, HEIGHT + BOUND_WIDTH * 2, stg1_vertical) # right boundary
 ]
 RIGIDBODIES = [
-    [Wall(0, HEIGHT * 5/6, WIDTH/2 + 100, PLATFORM_HEIGHT), Wall(WIDTH/2 + 100 + STD_GAP, HEIGHT * 5/6, WIDTH - WIDTH/2 - 100 - STD_GAP, PLATFORM_HEIGHT),
-     Wall(0, HEIGHT * 2/3, WIDTH/4, PLATFORM_HEIGHT), Wall(WIDTH/4 + STD_GAP, HEIGHT * 2/3, WIDTH - WIDTH/4 - STD_GAP, PLATFORM_HEIGHT),
-     Wall(0, 0.5 * HEIGHT, 0.75 * WIDTH, PLATFORM_HEIGHT), Wall(0.75 * WIDTH + STD_GAP, 0.5 * HEIGHT, WIDTH - 0.75 * WIDTH - STD_GAP, PLATFORM_HEIGHT),
-     Wall(0, HEIGHT * 1/3, 50, PLATFORM_HEIGHT), Wall(50 + STD_GAP, HEIGHT * 1/3, WIDTH - 50 - STD_GAP, PLATFORM_HEIGHT),
-     Wall(0.8 * WIDTH, HEIGHT * 1/6, WIDTH * 0.2, PLATFORM_HEIGHT), Wall(0, HEIGHT * 1/6, 0.8 * WIDTH - STD_GAP, PLATFORM_HEIGHT)
+    [Wall(0, HEIGHT * 5/6, WIDTH/2 + 100, PLATFORM_HEIGHT, stg1_horizontal), Wall(WIDTH/2 + 100 + STD_GAP, HEIGHT * 5/6, WIDTH - WIDTH/2 - 100 - STD_GAP, PLATFORM_HEIGHT, stg1_horizontal),
+     Wall(0, HEIGHT * 2/3, WIDTH/4, PLATFORM_HEIGHT, stg1_horizontal), Wall(WIDTH/4 + STD_GAP, HEIGHT * 2/3, WIDTH - WIDTH/4 - STD_GAP, PLATFORM_HEIGHT, stg1_horizontal),
+     Wall(0, 0.5 * HEIGHT, 0.75 * WIDTH, PLATFORM_HEIGHT, stg1_horizontal), Wall(0.75 * WIDTH + STD_GAP, 0.5 * HEIGHT, WIDTH - 0.75 * WIDTH - STD_GAP, PLATFORM_HEIGHT, stg1_horizontal),
+     Wall(0, HEIGHT * 1/3, 50, PLATFORM_HEIGHT, stg1_horizontal), Wall(50 + STD_GAP, HEIGHT * 1/3, WIDTH - 50 - STD_GAP, PLATFORM_HEIGHT, stg1_horizontal),
+     Wall(0.8 * WIDTH, HEIGHT * 1/6, WIDTH * 0.2, PLATFORM_HEIGHT, stg1_horizontal), Wall(0, HEIGHT * 1/6, 0.8 * WIDTH - STD_GAP, PLATFORM_HEIGHT, stg1_horizontal)
      ] + BOUNDARIES,
      [
-         Wall(0, 0, PLATFORM_HEIGHT, 0.9 * HEIGHT), Wall(WIDTH - PLATFORM_HEIGHT, 0, PLATFORM_HEIGHT, 0.9 * HEIGHT),
-         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.9 - PLATFORM_HEIGHT, WIDTH - PLATFORM_HEIGHT - STD_GAP, PLATFORM_HEIGHT),
-         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.7 - PLATFORM_HEIGHT, STD_GAP, PLATFORM_HEIGHT),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 2, HEIGHT * 0.7 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2),
-         Wall(PLATFORM_HEIGHT, HEIGHT * 0.5 - PLATFORM_HEIGHT, STD_GAP * 3, PLATFORM_HEIGHT),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 3, HEIGHT * 0.5 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 4, HEIGHT * 0.3 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.6),
-         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.3 - PLATFORM_HEIGHT, STD_GAP * 3, PLATFORM_HEIGHT),
-         Wall(PLATFORM_HEIGHT, HEIGHT * 0.1 - PLATFORM_HEIGHT, STD_GAP * 5, PLATFORM_HEIGHT),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 5, 0, PLATFORM_HEIGHT, WIDTH * 0.55),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 6.25, HEIGHT * 0.3 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2),
-         Wall(PLATFORM_HEIGHT + STD_GAP * 6.25, HEIGHT * 0.6 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2)
+         Wall(0, 0, PLATFORM_HEIGHT, 0.9 * HEIGHT, stg2_vertical), Wall(WIDTH - PLATFORM_HEIGHT, 0, PLATFORM_HEIGHT, 0.9 * HEIGHT, stg2_vertical),
+         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.9 - PLATFORM_HEIGHT, WIDTH - PLATFORM_HEIGHT - STD_GAP, PLATFORM_HEIGHT, stg2_horizontal),
+         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.7 - PLATFORM_HEIGHT, STD_GAP, PLATFORM_HEIGHT, stg2_horizontal),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 2, HEIGHT * 0.7 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2, stg2_vertical),
+         Wall(PLATFORM_HEIGHT, HEIGHT * 0.5 - PLATFORM_HEIGHT, STD_GAP * 3, PLATFORM_HEIGHT, stg2_horizontal),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 3, HEIGHT * 0.5 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2, stg2_vertical),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 4, HEIGHT * 0.3 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.6, stg2_vertical),
+         Wall(PLATFORM_HEIGHT + STD_GAP, HEIGHT * 0.3 - PLATFORM_HEIGHT, STD_GAP * 3, PLATFORM_HEIGHT, stg2_horizontal),
+         Wall(PLATFORM_HEIGHT, HEIGHT * 0.1 - PLATFORM_HEIGHT, STD_GAP * 5, PLATFORM_HEIGHT, stg2_horizontal),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 5, 0, PLATFORM_HEIGHT, WIDTH * 0.55, stg2_vertical),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 6.25, HEIGHT * 0.3 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2, stg2_vertical),
+         Wall(PLATFORM_HEIGHT + STD_GAP * 6.25, HEIGHT * 0.6 - PLATFORM_HEIGHT, PLATFORM_HEIGHT, HEIGHT * 0.2, stg2_vertical)
      ] + BOUNDARIES,
      [
-         Wall(STD_GAP, PLATFORM_HEIGHT, WIDTH - STD_GAP, PLATFORM_HEIGHT),
-         Wall(WIDTH * 0.7, HEIGHT * 0.8, STD_GAP, PLATFORM_HEIGHT),
-         Wall(WIDTH * 0.6, HEIGHT * 0.5, PLATFORM_HEIGHT, HEIGHT * 0.2),
-         Wall(WIDTH * 0.7, HEIGHT * 0.4, STD_GAP, PLATFORM_HEIGHT),
-         Wall(WIDTH * 0.4, HEIGHT * 0.4, STD_GAP, PLATFORM_HEIGHT),
-         Wall(WIDTH * 0.4, HEIGHT * 0.7, STD_GAP, PLATFORM_HEIGHT),
-         Wall(WIDTH * 0.3, HEIGHT * 0.1, PLATFORM_HEIGHT, HEIGHT * 0.45),
-         Wall(WIDTH * 0.1, HEIGHT * 0.7, STD_GAP, PLATFORM_HEIGHT),
-         Wall(0, HEIGHT * 0.2, STD_GAP, PLATFORM_HEIGHT),
-         Wall(0, 0, PLATFORM_HEIGHT, HEIGHT * 0.2),
+         Wall(STD_GAP, PLATFORM_HEIGHT, WIDTH - STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(WIDTH * 0.7, HEIGHT * 0.8, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(WIDTH * 0.6, HEIGHT * 0.5, PLATFORM_HEIGHT, HEIGHT * 0.2, stg3_vertical),
+         Wall(WIDTH * 0.7, HEIGHT * 0.4, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(WIDTH * 0.4, HEIGHT * 0.4, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(WIDTH * 0.4, HEIGHT * 0.7, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(WIDTH * 0.3, HEIGHT * 0.1, PLATFORM_HEIGHT, HEIGHT * 0.45, stg3_vertical),
+         Wall(WIDTH * 0.1, HEIGHT * 0.7, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(0, HEIGHT * 0.2, STD_GAP, PLATFORM_HEIGHT, stg3_horizontal),
+         Wall(0, 0, PLATFORM_HEIGHT, HEIGHT * 0.2, stg3_vertical),
      ] + [BOUNDARIES[0]]
 ]
 
@@ -194,7 +205,7 @@ def run(name):
                 pygame.quit()
                 sys.exit()
 
-        WIN.fill((255, 255, 255))
+        WIN.blit(bgs[curScene], (0, 0))
         player.update()
         player.draw(WIN)
         for wall in RIGIDBODIES[curScene]:
@@ -203,7 +214,7 @@ def run(name):
         for key in keys:
             if keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER]:
                 player.pos = Point(player.pos.x, player.posInit.y - player.rect.height//2)
-                curScene = 2
+                curScene = 3
         FPS.tick(TICKRATE)
         pygame.display.update()
 
