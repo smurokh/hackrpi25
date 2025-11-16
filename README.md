@@ -1,4 +1,4 @@
-Quick setup (Unix / macOS)
+Run our project.
 1. Open a terminal in the project root.
 2. Create a venv and activate it:
    - macOS / Linux (bash/zsh):
@@ -16,16 +16,13 @@ Quick setup (Unix / macOS)
      python -m venv .venv
      .\.venv\Scripts\activate
      ```
-
 3. Upgrade pip and install requirements:
    ```bash
    python -m pip install --upgrade pip
    pip install -r requirements.txt
-   ```
-   
-Running the project
-
-- Run:
+   ``` 
+4. Running the project
+   Run:
   ```
   python launcher.py
   ```
