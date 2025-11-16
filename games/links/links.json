@@ -1,0 +1,77 @@
+[
+  {
+    "id": "cs",
+    "title": "Computer Science",
+    "content": "Computer science is the study of computation, information processes, and the design of hardware and software [[dead_link|systems]]. The field encompasses [[dead_link|algorithms]], programming languages, machine learning, and theoretical models of [[dead_link|computation]]. Modern interdisciplinary branches connect computing to linguistics ([[cl|Computational Linguistics]]), humanities scholarship ([[dh|Digital Humanities]]), and historical analysis of early computing devices ([[hoc|History of Computing]])."
+  },
+  {
+    "id": "hoc",
+    "title": "History of Computing",
+    "content": "History of computing examines the development of computational devices and methodologies from ancient counting tools to modern [[dead_link|information machines]]. It studies innovations such as ([[mcd|Mechanical Calculating Devices]]), early encryption systems ([[ec|Early Cryptography]]), and foundational theories shaping modern [[cs|Computer Science]]."
+  },
+  {
+    "id": "mcd",
+    "title": "Mechanical Calculating Devices",
+    "content": "Mechanical calculating devices are early tools designed to automate arithmetic using gears, levers, and clockwork [[dead_link|mechanisms]]. These machines influenced both real historical development and fictional constructs such as [[ab|Automaton Birds]], and remain central artifacts in the broader [[hoc|History of Computing]]."
+  },
+  {
+    "id": "ec",
+    "title": "Early Cryptography",
+    "content": "Early cryptography refers to pre-modern systems of encoding messages, including substitution ciphers, polyalphabetic schemes, and mechanical [[dead_link|cipher wheels]]. The field is linked to mysterious encoded texts such as ([[cm|Cipher Manuscripts]]) and also to literary studies involving [[pc|Poe and Cryptography]]."
+  },
+  {
+    "id": "cl",
+    "title": "Computational Linguistics",
+    "content": "Computational linguistics combines linguistics and computer science to model human language with [[dead_link|computational models]]. Applications include text parsing, authorship identification, and semantic analysis, topics that overlap with ([[sty|Stylometry]]) and interdisciplinary research in [[dh|Digital Humanities]]."
+  },
+  {
+    "id": "sty",
+    "title": "Stylometry",
+    "content": "Stylometry is the quantitative study of linguistic style using statistical and [[dead_link|machine-based]] methods. It is used in authorship attribution, historical text analysis, and investigations involving coded or disputed works, often connecting to ([[lf|Literary Forensics]]) and studies of [[pc|Poe and Cryptography]]."
+  },
+  {
+    "id": "lf",
+    "title": "Literary Forensics",
+    "content": "Literary forensics applies analytical and scientific techniques to literature to assess authorship, authenticity, and textual [[dead_link|integrity]]. The discipline frequently examines works within ([[agl|American Gothic Literature]]) and employs stylistic tools derived from [[sty|Stylometry]]."
+  },
+  {
+    "id": "dh",
+    "title": "Digital Humanities",
+    "content": "Digital humanities integrates computational tools with humanistic research, enabling large-scale text mining, digital archiving, and interactive [[dead_link|scholarly platforms]]. Practitioners work with digital genres such as ([[el|Electronic Literature]]) and preserve unusual or fragile works within the ([[aot|Archive of Obscure Texts]])."
+  },
+  {
+    "id": "el",
+    "title": "Electronic Literature",
+    "content": "Electronic literature comprises digital-native works that use computational, multimedia, or interactive [[dead_link|structures]]. The genre includes hypertext narratives such as ([[hf|Hypertext Fiction]]) and is often studied alongside digital archiving efforts like the [[aot|Archive of Obscure Texts]]."
+  },
+  {
+    "id": "aot",
+    "title": "Archive of Obscure Texts",
+    "content": "The Archive of Obscure Texts is a fictional digital repository dedicated to rare, fragmentary, or enigmatic [[dead_link|documents]]. Its collections include encoded works such as ([[cm|Cipher Manuscripts]]) and historical publications featured in ([[fp19|Forgotten Periodicals of the 19th Century]]), making it an important resource within [[dh|Digital Humanities]]."
+  },
+  {
+    "id": "cm",
+    "title": "Cipher Manuscripts",
+    "content": "Cipher manuscripts are texts written using symbolic or coded systems designed to resist straightforward [[dead_link|interpretation]]. They attract scholars of [[ec|Early Cryptography]] and are preserved in fictional archives like the [[aot|Archive of Obscure Texts]], frequently intersecting with studies of [[pc|Poe and Cryptography]]."
+  },
+  {
+    "id": "pc",
+    "title": "Poe and Cryptography",
+    "content": "Poe and cryptography refers to [[eap|Edgar Allan Poe]]'s interest in puzzles, cryptograms, and linguistic [[dead_link|riddles]]. His essays and challenges influenced later cryptographic studies and are often analyzed in relation to [[ec|Early Cryptography]], stylistic methods in [[sty|Stylometry]], and literary tradition in [[agl|American Gothic Literature]]."
+  },
+  {
+    "id": "agl",
+    "title": "American Gothic Literature",
+    "content": "American Gothic literature explores darkness, psychological tension, and supernatural [[dead_link|motifs]] in U.S. settings. Writers such as [[eap|Edgar Allan Poe]] helped define the genre, which is examined in analytical disciplines including [[lf|Literary Forensics]]."
+  },
+  {
+    "id": "fp19",
+    "title": "Forgotten Periodicals of the 19th Century",
+    "content": "Forgotten Periodicals of the 19th Century refers to obscure magazines and short-lived publications featuring serialized fiction, puzzles, and experimental [[dead_link|narratives]]. These works are often connected to cryptographic documents within the [[aot|Archive of Obscure Texts]] and sometimes relate to writings by [[eap|Edgar Allan Poe]]."
+  },
+  {
+    "id": "eap",
+    "title": "Edgar Allan Poe",
+    "content": "Edgar Allan Poe was an American writer, poet, and critic known for his contributions to [[dead_link|detective fiction]] and macabre storytelling. His works are foundational within [[agl|American Gothic Literature]], and his fascination with cryptography is widely examined in ([[pc|Poe and Cryptography]])."
+  }
+]

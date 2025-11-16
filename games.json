@@ -10,6 +10,11 @@
     "mode": "interactive"
   },
   {
+    "name": "wiki",
+    "entry": "games/links/links.py",
+    "mode": "interactive"
+  },
+  {
     "name": "snakes",
     "entry": "games/snakes/snakes_and_ladders.py",
     "mode": "interactive"
