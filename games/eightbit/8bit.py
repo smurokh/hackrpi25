@@ -8,7 +8,11 @@ import pygame as p
 import sys
 import json
 import time
+import os
 
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSET_DIR = os.path.join(BASE_DIR, "assets")
 
 
 def move(screen, player,player_rect,w, m):
@@ -84,7 +88,7 @@ def read_instructions(screen,g_font, s_font, name,w,h, scroll):
 
 
 def get_clue(text_list,screen, s_rect,sprite, w,h,player_rect, loc):
-    font = p.font.Font("Pixellari.ttf", 20)
+    font = p.font.Font(os.path.join(ASSET_DIR, "Pixellari.ttf"), 20)
 
     clue_f = False
     sprite.set_alpha(0)
@@ -116,13 +120,13 @@ def run_8bit(player_name,start_ts):
     p.display.set_caption("8-bit Scavenger Hunt")
     WIDTH, HEIGHT = 800,600
     screen = p.display.set_mode((WIDTH,HEIGHT))
-    game_font = p.font.Font("Pixellari.ttf", 40)
-    small_font = p.font.Font("Pixellari.ttf", 20)
+    game_font = p.font.Font(os.path.join(ASSET_DIR, "Pixellari.ttf"), 40)
+    small_font = p.font.Font(os.path.join(ASSET_DIR, "Pixellari.ttf"), 20)
 
     #MAIN GAME ASSETS 
-    bkg = p.transform.scale(p.image.load('C:/Users/angel/Dropbox/Games/8bit_bkg_wider.png'), (800, 600))
-    player = p.transform.scale(p.image.load('C:/Users/angel/Dropbox/Games/bartholomew.png').convert_alpha(), (100, 100))
-    scroll = p.transform.scale( p.image.load('C:/Users/angel/Dropbox/Games/scroll.png'), (400, 300))
+    bkg = p.transform.scale(p.image.load(os.path.join(ASSET_DIR, '8bit_bkg_wider.png')), (800, 600))
+    player = p.transform.scale(p.image.load(os.path.join(ASSET_DIR, 'bartholomew.png')).convert_alpha(), (100, 100))
+    scroll = p.transform.scale( p.image.load(os.path.join(ASSET_DIR, 'scroll.png')), (400, 300))
     player_rect = player.get_rect()
 
     #PLAYER INITIAL POSITION
@@ -132,7 +136,7 @@ def run_8bit(player_name,start_ts):
     
       
     #clue 1 asset  
-    oracle = p.transform.scale(p.image.load('C:/Users/angel/Dropbox/Games/the_oracle (2).png').convert_alpha(), (160, 180))
+    oracle = p.transform.scale(p.image.load(os.path.join(ASSET_DIR, 'the_oracle (2).png')).convert_alpha(), (160, 180))
     o_rect = oracle.get_rect()
     #clue 1 position
     o_rect.x = 0
@@ -140,14 +144,14 @@ def run_8bit(player_name,start_ts):
     
     
     #clue 2 asset
-    backpack = p.transform.scale(p.image.load('C:/Users/angel/Dropbox/Games/Backpack.png').convert_alpha(), (160, 240))
+    backpack = p.transform.scale(p.image.load(os.path.join(ASSET_DIR, 'Backpack.png')).convert_alpha(), (160, 240))
     bp_rect = backpack.get_rect()
     #clue 2 position
     bp_rect.x = 610
     bp_rect.y = 50
     
     #clue 3 asset
-    key = p.transform.scale(p.image.load('C:/Users/angel/Dropbox/Games/key.png').convert_alpha(), (200, 250))
+    key = p.transform.scale(p.image.load(os.path.join(ASSET_DIR, 'key.png')).convert_alpha(), (200, 250))
     key_rect = key.get_rect()
     
     #key found? and position
@@ -168,13 +172,16 @@ def run_8bit(player_name,start_ts):
     c1_counter = 0
     c2_counter = 0
 
+    result = {'action': 'exit'}
+
     while run:
         for event in p.event.get():
             if event.type == p.QUIT:
                 run = False
-        
+
             if event.type == p.MOUSEBUTTONDOWN and nxt_lvl.collidepoint(event.pos) and key_found == True:
                 run  = False
+                result = {'action': 'finished'}
 
                 
         screen.blit(bkg, (0, 0))
@@ -212,7 +219,7 @@ def run_8bit(player_name,start_ts):
                 mins = int(elapsed) // 60
                 secs = int(elapsed) % 60
                 timer_str = f"{mins:02d}:{secs:02d}"
-                small = small_font.render(f"Time: {timer_str}", True, (57,255,20))
+                small = small_font.render(f"Time: {timer_str}", True, (157,255,120))
                 screen.blit(small, (8, 8))
             except Exception:
                 pass
@@ -221,7 +228,15 @@ def run_8bit(player_name,start_ts):
         p.display.update()     
 
     
-    p.quit() 
+    p.quit()
+    # include elapsed_seconds if start_ts present
+    try:
+        if start_ts is not None:
+            result['elapsed_seconds'] = round(time.time() - float(start_ts), 3)
+    except Exception:
+        pass
+
+    return result
 
     
 if __name__ == "__main__":
@@ -238,4 +253,3 @@ if __name__ == "__main__":
 
     res = run_8bit(player_name, start_ts)
     print(json.dumps(res))  
-    
