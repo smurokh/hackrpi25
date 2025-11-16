@@ -24,6 +24,11 @@
     "mode": "interactive"
   },
   {
+    "name": "modern",
+    "entry": "games/modern/modern_comp.py",
+    "mode": "interactive"
+  },
+  {
     "name": "ai",
     "entry": "games/ai/ai.py",
     "mode": "interactive"
