@@ -11,6 +11,10 @@ import json
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 
+# Header / UI offset
+HEADER_HEIGHT = 64   # space reserved at top for the header
+UI_TOP = HEADER_HEIGHT
+
 BOARD_PADDING = 16
 BOARD_SIZE = 480   # 10x10 board (cells will be 48x48)
 CELL_COUNT = 10
@@ -62,15 +66,7 @@ TIMER_START: Optional[float] = None
 # Module-level player icon (will be set in run_flash if raven.png available)
 player_icon = None  # pygame.Surface or None
 
-# -------------------------
-# Helper functions (pure)
-# -------------------------
-
 def cell_index_to_coord(cell_index):
-    """
-    Convert a fixed cell index (1..100) to pixel center (x, y).
-    Board layout zig-zags left-right every other row.
-    """
     idx = cell_index - 1
     row_from_bottom = idx // 10
     within_row = idx % 10
@@ -80,16 +76,17 @@ def cell_index_to_coord(cell_index):
         col = 9 - within_row
     row_top_based = 9 - row_from_bottom
     x = BOARD_PADDING + col * CELL_SIZE + CELL_SIZE // 2
-    y = BOARD_PADDING + row_top_based * CELL_SIZE + CELL_SIZE // 2
+    y = BOARD_PADDING + UI_TOP + row_top_based * CELL_SIZE + CELL_SIZE // 2
     return x, y
 
 def coord_to_cell_index(px, py):
+    # adjust vertical checks for UI_TOP
     if px < BOARD_PADDING or px >= BOARD_PADDING + BOARD_SIZE:
         return None
-    if py < BOARD_PADDING or py >= BOARD_PADDING + BOARD_SIZE:
+    if py < BOARD_PADDING + UI_TOP or py >= BOARD_PADDING + UI_TOP + BOARD_SIZE:
         return None
     col = (px - BOARD_PADDING) // CELL_SIZE
-    row_top = (py - BOARD_PADDING) // CELL_SIZE  # 0 at top
+    row_top = (py - (BOARD_PADDING + UI_TOP)) // CELL_SIZE  # 0 at top (within board)
     row_from_bottom = 9 - row_top
     if row_from_bottom < 0 or row_from_bottom > 9:
         return None
@@ -182,10 +179,6 @@ def get_jump_path_points(start_cell, end_cell):
 # -------------------------
 
 def _draw_smooth_thick_path(surface, pts, color, thickness):
-    """
-    Draw a smooth thick path by building a polygon 'tube' around a centerline.
-    This reduces pixelation compared to pygame.draw.lines with large widths.
-    """
     if not pts or len(pts) < 2:
         return
     try:
@@ -243,19 +236,36 @@ def _draw_smooth_thick_path(surface, pts, color, thickness):
 # Drawing routines (use fonts defined in run_flash)
 # -------------------------
 
+def draw_header(surface):
+    try:
+        hdr = font_large.render("Snakes & Ladders", True, BLACK)
+    except Exception:
+        # fallback if font_large not available yet
+        small = pygame.font.SysFont("arial", 24, bold=True)
+        hdr = small.render("Snakes & Ladders", True, BLACK)
+    header_x = (surface.get_width() - hdr.get_width()) // 2
+    header_y = BOARD_PADDING
+    surface.blit(hdr, (header_x, header_y))
+
 def draw_board(surface, font_small):
-    board_rect = pygame.Rect(BOARD_PADDING, BOARD_PADDING, BOARD_SIZE, BOARD_SIZE)
+    board_rect = pygame.Rect(BOARD_PADDING, BOARD_PADDING + UI_TOP, BOARD_SIZE, BOARD_SIZE)
     pygame.draw.rect(surface, BLACK, board_rect, 2)
     for r in range(CELL_COUNT):
         for c in range(CELL_COUNT):
             rect = pygame.Rect(BOARD_PADDING + c * CELL_SIZE,
-                               BOARD_PADDING + r * CELL_SIZE,
+                               BOARD_PADDING + UI_TOP + r * CELL_SIZE,
                                CELL_SIZE, CELL_SIZE)
             # alternate light gray tiles
             color = TILE_LIGHT if (r + c) % 2 == 0 else TILE_DARK
             pygame.draw.rect(surface, color, rect)
             pygame.draw.rect(surface, BLACK, rect, 1)
-    # Note: grid numbers are drawn separately so they can be layered above snakes
+    # draw cell numbers based on centers (cell_index_to_coord already includes UI_TOP)
+    for cell in range(1, 101):
+        x, y = cell_index_to_coord(cell)
+        text = font_small.render(str(cell), True, BLACK)
+        tx = x - CELL_SIZE // 2 + 4
+        ty = y - CELL_SIZE // 2 + 2
+        surface.blit(text, (tx, ty))
 
 def draw_snakes(surface):
     """Draw all snake paths (they will be drawn first so other elements can be layered above)."""
@@ -353,7 +363,7 @@ def run_flash(on_finish=None, width=800, height=600):
     clock = pygame.time.Clock()
 
     # fonts (set globals used by draw functions)
-    global font_small, font_medium, font_large, font_dice, dice_rect, player_icon
+    global font_small, font_medium, font_large, font_dice, dice_rect, player_icon, font_info
     font_small = pygame.font.SysFont("arial", 14)      # kept small for compact UI text
     font_medium = pygame.font.SysFont("arial", 20, bold=True)
     font_large = pygame.font.SysFont("arial", 44, bold=True)
@@ -364,13 +374,11 @@ def run_flash(on_finish=None, width=800, height=600):
     # Layout rectangles (placed relative to board)
     DICE_WIDTH = 220
     DICE_HEIGHT = 200
-    # Move the dice box down to make room for timer/title
-    dice_rect_local = pygame.Rect(BOARD_PADDING + BOARD_SIZE + 16, BOARD_PADDING + 24 + 40, DICE_WIDTH, DICE_HEIGHT)
+    # Move the dice box down to make room for the header (UI_TOP)
+    dice_rect_local = pygame.Rect(BOARD_PADDING + BOARD_SIZE + 16, BOARD_PADDING + UI_TOP + 24 + 40, DICE_WIDTH, DICE_HEIGHT)
     info_rect_local = pygame.Rect(dice_rect_local.x, dice_rect_local.y + dice_rect_local.height + 12, 240, 300)
 
-    # Move power-up buttons down (user requested)
-    # Previously: y = info_rect_local.y + info_rect_local.height - 100
-    # New: move down by ~40 pixels to give more separation
+    # Move power-up buttons downward (keeping previous spacing)
     btn_mini_local = pygame.Rect(info_rect_local.x, info_rect_local.y + info_rect_local.height - 150, 130, 36)
     btn_swap_local = pygame.Rect(info_rect_local.x + 150, info_rect_local.y + info_rect_local.height - 150, 130, 36)
 
@@ -461,13 +469,18 @@ def run_flash(on_finish=None, width=800, height=600):
                     message = "Game reset. Click dice or press SPACE to roll"
                     swap_mode = False
                     swap_first = None
+                    show_win_time = None
 
                 if event.key == pygame.K_SPACE and not player['has_won'] and not swap_mode:
                     roll = roll_dice_animation_inner()
                     player['last_roll'] = roll
                     proposed = player['square'] + roll
-                    if proposed > 100:
-                        message = f"Rolled {roll}. Overshoot 100 — no move."
+                    # NEW BEHAVIOR: overshooting 100 is allowed and still wins
+                    if proposed >= 100:
+                        move_player_along_numeric_inner(100)
+                        player['has_won'] = True
+                        message = f"Rolled {roll}. Reached 100 — you win! Continuing shortly..."
+                        show_win_time = time.time()
                     else:
                         move_player_along_numeric_inner(proposed)
                         jumped = JUMPS.get(player['square'])
@@ -479,7 +492,7 @@ def run_flash(on_finish=None, width=800, height=600):
                             message = f"Rolled {roll}. Moved to {player['square']}."
                         if player['square'] == 100:
                             player['has_won'] = True
-                            message = "You reached 100! You win! Press R to restart."
+                            message = "You reached 100! You win! Continuing shortly..."
                             show_win_time = time.time()
 
                 if event.key == pygame.K_m and not player['has_won']:
@@ -491,7 +504,8 @@ def run_flash(on_finish=None, width=800, height=600):
                         message = f"Mini-ladder used: {start} -> {end}."
                         if player['square'] == 100:
                             player['has_won'] = True
-                            message = "You reached 100! You win! Press R to restart."
+                            message = "You reached 100! You win! Continuing shortly..."
+                            show_win_time = time.time()
                     else:
                         message = "No Mini Ladder charges left."
 
@@ -511,8 +525,12 @@ def run_flash(on_finish=None, width=800, height=600):
                     roll = roll_dice_animation_inner()
                     player['last_roll'] = roll
                     proposed = player['square'] + roll
-                    if proposed > 100:
-                        message = f"Rolled {roll}. Overshoot 100 — no move."
+                    # NEW BEHAVIOR: overshooting 100 is allowed and still wins
+                    if proposed >= 100:
+                        move_player_along_numeric_inner(100)
+                        player['has_won'] = True
+                        message = f"Rolled {roll}. Reached 100 — you win! Continuing shortly..."
+                        show_win_time = time.time()
                     else:
                         move_player_along_numeric_inner(proposed)
                         jumped = JUMPS.get(player['square'])
@@ -524,7 +542,8 @@ def run_flash(on_finish=None, width=800, height=600):
                             message = f"Rolled {roll}. Moved to {player['square']}."
                         if player['square'] == 100:
                             player['has_won'] = True
-                            message = "You reached 100! You win! Press R to restart."
+                            message = "You reached 100! You win! Continuing shortly..."
+                            show_win_time = time.time()
                     continue
 
                 # powerup buttons
@@ -537,7 +556,8 @@ def run_flash(on_finish=None, width=800, height=600):
                         message = f"Mini-ladder used: {start} -> {end}."
                         if player['square'] == 100:
                             player['has_won'] = True
-                            message = "You reached 100! You win! Press R to restart."
+                            message = "You reached 100! You win! Continuing shortly..."
+                            show_win_time = time.time()
                     else:
                         message = "No Mini Ladder charges left."
                     continue
@@ -588,7 +608,8 @@ def run_flash(on_finish=None, width=800, height=600):
                                 message = f"Swapped tiles {first} and {second}. Moved you to {player['square']}."
                                 if player['square'] == 100:
                                     player['has_won'] = True
-                                    message = "You reached 100! You win! Press R to restart."
+                                    message = "You reached 100! You win! Continuing shortly..."
+                                    show_win_time = time.time()
                             else:
                                 message = f"Swapped tiles {first} and {second} (contents swapped)."
                             swap_mode = False
@@ -597,6 +618,10 @@ def run_flash(on_finish=None, width=800, height=600):
 
         # draw frame
         screen.fill(BACKGROUND)
+
+        # draw header at top (persistent between animations)
+        draw_header(screen)
+
         draw_board(screen, font_small)
 
         # Draw snakes first (below)
@@ -666,25 +691,32 @@ def run_flash(on_finish=None, width=800, height=600):
 
         if swap_mode and not swap_first:
             prompt = font_medium.render("Swap mode: click first tile", True, BLACK)
-            screen.blit(prompt, (BOARD_PADDING + BOARD_SIZE//2 - prompt.get_width()//2, BOARD_PADDING + BOARD_SIZE + 6))
+            screen.blit(prompt, (BOARD_PADDING + BOARD_SIZE//2 - prompt.get_width()//2, BOARD_PADDING + UI_TOP + BOARD_SIZE + 6))
         elif swap_mode and swap_first:
             prompt = font_medium.render("Swap mode: click adjacent tile to swap", True, BLACK)
-            screen.blit(prompt, (BOARD_PADDING + BOARD_SIZE//2 - prompt.get_width()//2, BOARD_PADDING + BOARD_SIZE + 6))
+            screen.blit(prompt, (BOARD_PADDING + BOARD_SIZE//2 - prompt.get_width()//2, BOARD_PADDING + UI_TOP + BOARD_SIZE + 6))
 
+        # Win overlay
         if player['has_won']:
             overlay = pygame.Surface((width, height), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 150))
             screen.blit(overlay, (0, 0))
             win_text = font_large.render("You Win!", True, GOLD)
-            sub_text = font_medium.render("Press R to play again or ESC to quit", True, WHITE)
+            sub_text = font_medium.render("Continuing to next game...", True, WHITE)
             screen.blit(win_text, ((width - win_text.get_width()) // 2, height // 2 - 60))
             screen.blit(sub_text, ((width - sub_text.get_width()) // 2, height // 2 + 10))
+
+            # After 2 seconds on the win screen, end this game so launcher can continue.
+            if show_win_time is not None and (time.time() - show_win_time) >= 2.0:
+                running = False
+                result = {'action': 'finished'}
+                break
 
         pygame.display.flip()
         clock.tick(FPS)
 
     # end main loop -> cleanup
-    # construct result dict for caller
+    # construct result dict for caller if not already set
     if player.get('has_won'):
         result = {'action': 'finished'}
     # else result was set earlier, e.g. skipped or exit
@@ -698,7 +730,7 @@ def run_flash(on_finish=None, width=800, height=600):
                 pass
     except Exception:
         pass
-    # tidy up pygame so interpreter isn't left with initialized modules
+    # tidy up pygame so it isn't left with initialized modules
     try:
         pygame.quit()
     except Exception:
@@ -724,6 +756,8 @@ def roll_dice_animation_impl(screen, dice_rect, font_dice, player_pos, player_co
         face = random.randint(1, 6)
         if face != last:
             screen.fill(BACKGROUND)
+            # draw header so it doesn't disappear during the animation
+            draw_header(screen)
             draw_board(screen, font_small)
             # draw snakes first so animation still looks consistent
             draw_snakes(screen)
@@ -737,6 +771,7 @@ def roll_dice_animation_impl(screen, dice_rect, font_dice, player_pos, player_co
         pygame.time.delay(60)
     final = random.randint(1, 6)
     screen.fill(BACKGROUND)
+    draw_header(screen)
     draw_board(screen, font_small)
     draw_snakes(screen)
     draw_grid_numbers(screen, font_small)
@@ -755,6 +790,7 @@ def move_player_along_numeric_impl(player_pos, target_square, surface, player_co
     for sq in range(current_square + step, target_square + step, step):
         pos = cell_index_to_coord(sq)
         surface.fill(BACKGROUND)
+        draw_header(surface)
         draw_board(surface, font_small)
         draw_snakes(surface)
         draw_grid_numbers(surface, font_small)
@@ -773,6 +809,7 @@ def animate_along_path_impl(player_pos, start_sq, end_sq, surface, player_color,
     for p in pts:
         ix, iy = p
         surface.fill(BACKGROUND)
+        draw_header(surface)
         draw_board(surface, font_small)
         draw_snakes(surface)
         draw_grid_numbers(surface, font_small)
