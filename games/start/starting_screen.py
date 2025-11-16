@@ -107,7 +107,7 @@ def run_start():
     p.init()
     p.font.init()
 
-    p.display.set_caption("[GAME NAME]")
+    p.display.set_caption("Time Escape")
     base_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else "."
     path = os.path.join(base_dir, "start_assets/Pixellari.ttf")
 
