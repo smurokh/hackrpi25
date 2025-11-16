@@ -349,7 +349,7 @@ def run_flash(on_finish=None, width=800, height=600):
     # initialize pygame & window
     pygame.init()
     screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption("Snakes & Ladders - 800x600")
+    pygame.display.set_caption("Snakes & Ladders")
     clock = pygame.time.Clock()
 
     # fonts (set globals used by draw functions)
@@ -559,7 +559,7 @@ def run_flash(on_finish=None, width=800, height=600):
                         continue
                     if swap_first is None:
                         swap_first = clicked_cell
-                        message = f"First tile selected: {swap_first}. Click adjacent tile to swap or click elsewhere to cancel."
+                        message = f"First tile selected: {swap_first}. Click adjacent tile to swap."
                         continue
                     else:
                         first = swap_first
@@ -585,7 +585,7 @@ def run_flash(on_finish=None, width=800, height=600):
                                     move_type = 'ladder'
                                 else:
                                     move_type = 'snake'
-                                message = f"Swapped tiles {first} and {second}. A {move_type} appeared and moved you to {player['square']}."
+                                message = f"Swapped tiles {first} and {second}. Moved you to {player['square']}."
                                 if player['square'] == 100:
                                     player['has_won'] = True
                                     message = "You reached 100! You win! Press R to restart."
